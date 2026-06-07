@@ -37,7 +37,6 @@ export default function RichTextEditorPanel({
     },
   })
 
-  // Sync external content changes from the sidebar without echoing another update.
   useEffect(() => {
     if (editor) {
       const currentJson = editor.getJSON()
@@ -47,15 +46,13 @@ export default function RichTextEditorPanel({
     }
   }, [content, editor])
 
-  if (!editor) {
-    return null
-  }
+  if (!editor) return null
 
   const casualFont = 'Comic Sans MS, Comic Sans'
   const casualFontActive = editor.isActive('textStyle', { fontFamily: casualFont })
 
   return (
-    <section className="workspace-panel full-bleed-editor">
+    <section className={`workspace-panel full-bleed-editor ${focusMode ? 'focus-mode' : ''}`}>
       <div className="editor-toolbar">
         <button
           className={`icon-button ${editor.isActive('bold') ? 'is-active' : ''}`}
@@ -71,9 +68,9 @@ export default function RichTextEditorPanel({
         >
           <Italic size={15} />
         </button>
-        
+
         <div className="toolbar-divider" />
-        
+
         <button
           className={`icon-button ${editor.isActive('heading', { level: 1 }) ? 'is-active' : ''}`}
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
@@ -122,17 +119,15 @@ export default function RichTextEditorPanel({
 
         <div className="toolbar-divider" />
 
-        {/* Basic font and color controls (simplified for Google Docs feel) */}
         <button
           className={`icon-button ${casualFontActive ? 'is-active' : ''}`}
           onClick={() => {
             const chain = editor.chain().focus()
             if (casualFontActive) {
               chain.unsetFontFamily().run()
-              return
+            } else {
+              chain.setFontFamily(casualFont).run()
             }
-
-            chain.setFontFamily(casualFont).run()
           }}
           title="Casual Font"
         >
@@ -155,16 +150,58 @@ export default function RichTextEditorPanel({
 
         <div className="toolbar-divider" />
 
-        <button
-          className={`icon-button${focusMode ? ' is-active' : ''}`}
-          onClick={onFocusModeToggle}
-          title={focusMode ? 'Exit Focus Mode' : 'Focus Mode'}
-        >
-          {focusMode ? <EyeOff size={15} /> : <Eye size={15} />}
-        </button>
+        {onFocusModeToggle && (
+          <button
+            className={`icon-button ${focusMode ? 'is-active' : ''}`}
+            onClick={onFocusModeToggle}
+            title={focusMode ? 'Exit Focus Mode' : 'Focus Mode'}
+          >
+            {focusMode ? <EyeOff size={15} /> : <Eye size={15} />}
+          </button>
+        )}
       </div>
 
-      <EditorContent editor={editor} className="editor-surface" />
+      <div className="editor-surface">
+        <EditorContent editor={editor} />
+      </div>
+
+      <style>{`
+        .full-bleed-editor .ProseMirror {
+          font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          font-size: 1rem;
+          line-height: 1.6;
+          color: #1f2421;
+          min-height: 100%;
+          padding: 2rem;
+          outline: none;
+        }
+        .focus-mode .ProseMirror {
+          max-width: 48rem;
+          margin: 0 auto;
+          box-shadow: none;
+        }
+        .ProseMirror h1 {
+          font-size: 2rem;
+          font-weight: 700;
+          margin-top: 1.5rem;
+          margin-bottom: 1rem;
+        }
+        .ProseMirror h2 {
+          font-size: 1.5rem;
+          font-weight: 600;
+          margin-top: 1.25rem;
+          margin-bottom: 0.75rem;
+        }
+        .ProseMirror h3 {
+          font-size: 1.25rem;
+          font-weight: 600;
+          margin-top: 1rem;
+          margin-bottom: 0.5rem;
+        }
+        .ProseMirror p {
+          margin-bottom: 1rem;
+        }
+      `}</style>
     </section>
   )
 }

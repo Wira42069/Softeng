@@ -1,8 +1,19 @@
 export type EditorMode = 'production' | 'editing' | 'preview'
 
-export type WorkflowStage = 'topic' | 'outline' | 'draft' | 'editing' | 'reflection' | 'export'
+export type WorkflowStage =
+  | 'topic'
+  | 'outline'
+  | 'draft'
+  | 'editing'
+  | 'reflection'
+  | 'export'
 
-export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'conflict' | 'error'
+export type SaveStatus =
+  | 'saved'
+  | 'saving'
+  | 'unsaved'
+  | 'conflict'
+  | 'error'
 
 export type JsonValue =
   | string
@@ -14,12 +25,11 @@ export type JsonValue =
 
 export interface TipTapNode {
   type: string
-  attrs?: Record<string, JsonValue>
+  attrs?: Record<string, unknown> & {
+    sentenceItems?: SentenceItem[]  
+  }
   content?: TipTapNode[]
-  marks?: {
-    type: string
-    attrs?: Record<string, JsonValue>
-  }[]
+  marks?: { type: string; attrs?: Record<string, JsonValue> }[]
   text?: string
 }
 
@@ -47,9 +57,19 @@ export interface VersionSummary {
   createdAt: string
 }
 
+/* ---------------------------- */
+/* FIXED: SentenceItem (single definition only)
+/* ---------------------------- */
+export interface SentenceVariation {
+  id: string
+  text: string
+}
+
 export interface SentenceItem {
   id: string
   text: string
+
+  variations?: SentenceVariation[]
 }
 
 export interface OutlineItem {
@@ -59,13 +79,16 @@ export interface OutlineItem {
   blockIndex: number
 }
 
+/* ---------------------------- */
+/* FIXED: consistent workspace model
+/* ---------------------------- */
 export interface ParagraphWorkspaceItem {
   id: string
+  headingId: string
   title: string
   level: number
-  headingIndex: number
-  paragraphIndex: number
   text: string
+  sentences: SentenceItem[]
   wordCount: number
   lengthStatus: 'too-short' | 'optimal' | 'too-long'
 }

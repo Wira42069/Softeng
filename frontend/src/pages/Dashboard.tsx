@@ -1,42 +1,57 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, Download, History, Menu } from 'lucide-react'
-import EditorPanel from '../components/EditorPanel.tsx'
-import Sidebar from '../components/Sidebar.tsx'
-import VersionsPanel from '../components/VersionsPanel.tsx'
 import html2pdf from 'html2pdf.js'
+
+import EditorPanel from '../components/EditorPanel'
+import Sidebar from '../components/Sidebar'
+import VersionsPanel from '../components/VersionsPanel'
+
 import { api } from '../lib/api'
 import {
   addOutlineHeading,
   buildDocxBlob,
-  countCharacters,
   countWords,
-  docToSentenceItems,
   docToText,
-  emptyDoc,
-  ensureParagraphWorkspaces,
-  extractOutline,
-  makeSentenceVariations,
   deleteOutlineBlock,
+  docToPreviewBlocks,
+  extractOutline,
+  getParagraphWorkspaces,
   moveOutlineBlock,
   normalizeDoc,
   renameOutlineHeading,
-  sentencesToDoc,
+  updateParagraphSentences,
+  updateParagraphText,
+  emptyDoc,
   serializeDoc,
-  docToPreviewBlocks,
+  countCharacters,
+  ensureParagraphWorkspaces,
+  docToSentenceItems,
+  sentencesToDoc,
+  makeSentenceVariations,
 } from '../lib/document'
-import type { DraftDetail, DraftSummary, SaveStatus, SentenceItem, TipTapDoc, EditorMode, WorkflowStage } from '../types'
+
+import type {
+  DraftDetail,
+  DraftSummary,
+  SaveStatus,
+  SentenceItem,
+  TipTapDoc,
+  EditorMode,
+  WorkflowStage,
+  ParagraphWorkspaceItem,
+} from '../types'
 
 type PendingAction =
   | { type: 'select'; draftId: string }
   | { type: 'create' }
-
 
 export default function Dashboard() {
   const { draftId } = useParams<{ draftId: string }>()
   const navigate = useNavigate()
 
   const [activeSentence, setActiveSentence] = useState<SentenceItem | null>(null)
+  const [activeParagraphId, setActiveParagraphId] = useState<string | null>(null)
   const [content, setContent] = useState<TipTapDoc>(emptyDoc)
   const [draft, setDraft] = useState<DraftDetail | null>(null)
   const [mode, setMode] = useState<EditorMode>('production')
@@ -47,11 +62,14 @@ export default function Dashboard() {
   const [showVersions, setShowVersions] = useState(false)
   const [title, setTitle] = useState('Untitled Draft')
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
-  const [variations, setVariations] = useState<string[]>([])
   const [workflowStage, setWorkflowStage] = useState<WorkflowStage>('draft')
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem('flowdraft-onboarded') !== 'true')
   const [focusMode, setFocusMode] = useState(false)
+  const [sentenceVariations, setSentenceVariations] = useState<
+    Record<string, string[]>
+  >({})
+
   const selectedDraftId = draft?.id ?? null
   const contentKey = serializeDoc(content)
   const contentDirty = Boolean(selectedDraftId) && contentKey !== savedContentKey
@@ -60,8 +78,12 @@ export default function Dashboard() {
   const wordCount = countWords(content)
   const characterCount = countCharacters(content)
   const outlineItems = extractOutline(content)
-  // Stable refs so effects always call the latest version of these functions
-  // without needing them in dependency arrays (replaces experimental useEffectEvent).
+  const variations =
+  activeSentence
+    ? sentenceVariations[activeSentence.id] ?? []
+    : []
+
+  // Stable refs for debounced saves
   const saveContentRef = useRef(saveContent)
   const renameDraftRef = useRef(renameDraft)
   const loadDraftsRef = useRef(loadDrafts)
@@ -82,34 +104,28 @@ export default function Dashboard() {
       setSavedContentKey(serializeDoc(emptyDoc))
       setTitle('Untitled Draft')
       setUpdatedAt(null)
+      setActiveSentence(null)
+      setActiveParagraphId(null)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId])
 
   useEffect(() => {
-    if (!selectedDraftId || !contentDirty || saveStatus === 'saving' || saveStatus === 'conflict') {
-      return
-    }
-
+    if (!selectedDraftId || !contentDirty || saveStatus === 'saving' || saveStatus === 'conflict') return
     const timeoutId = window.setTimeout(() => {
       void saveContentRef.current(content, false)
     }, 1200)
-
     return () => window.clearTimeout(timeoutId)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, contentDirty, saveStatus, selectedDraftId, updatedAt])
 
   useEffect(() => {
-    if (!selectedDraftId || !titleDirty || saveStatus === 'conflict') {
-      return
-    }
-
+    if (!selectedDraftId || !titleDirty || saveStatus === 'conflict') return
     const timeoutId = window.setTimeout(() => {
       void renameDraftRef.current()
     }, 900)
-
     return () => window.clearTimeout(timeoutId)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDraftId, title, titleDirty, saveStatus])
 
   useEffect(() => {
@@ -119,15 +135,13 @@ export default function Dashboard() {
         void saveContentRef.current(content, false)
       }
     }
-
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content])
 
   async function loadDrafts() {
     const res = await api.get<DraftSummary[]>('/api/drafts')
-
     if (!draftId && res.data[0]) {
       navigate(`/dashboard/${res.data[0].id}`, { replace: true })
     }
@@ -136,36 +150,30 @@ export default function Dashboard() {
   async function loadDraft(idToLoad: string) {
     const res = await api.get<DraftDetail>(`/api/drafts/${idToLoad}`)
     const nextContent = ensureParagraphWorkspaces(normalizeDoc(res.data.content))
-
     setActiveSentence(null)
+    setActiveParagraphId(null)
     setContent(nextContent)
     setDraft(res.data)
     setSavedContentKey(serializeDoc(nextContent))
     setSaveStatus('saved')
     setTitle(res.data.title)
     setUpdatedAt(res.data.updatedAt)
-    setVariations([])
+    setSentenceVariations({})
     setShowVersions(false)
   }
 
   async function saveContent(nextContent: TipTapDoc, overwriteConflict: boolean) {
-    if (!selectedDraftId) {
-      return
-    }
-
+    if (!selectedDraftId) return
     if (!overwriteConflict && serializeDoc(nextContent) === savedContentKey) {
       setSaveStatus('saved')
       return
     }
-
     setSaveStatus('saving')
-
     try {
       const res = await api.put<{ draft: DraftDetail }>(`/api/drafts/${selectedDraftId}/content`, {
         content: nextContent,
         lastKnownUpdatedAt: overwriteConflict ? undefined : updatedAt,
       })
-
       const savedDoc = normalizeDoc(res.data.draft.content)
       setContent(savedDoc)
       setDraft(res.data.draft)
@@ -176,37 +184,56 @@ export default function Dashboard() {
     } catch (error) {
       if (isConflictError(error)) {
         setSaveStatus('conflict')
-        return
+      } else {
+        setSaveStatus('error')
       }
-
-      setSaveStatus('error')
     }
   }
 
   function handleContentChange(nextContent: TipTapDoc) {
     setContent(nextContent)
     setSaveStatus('unsaved')
+    // Clear active sentence if it might have been removed
+    if (activeSentence) {
+      const paragraphs = getParagraphWorkspaces(nextContent)
+      const stillExists = paragraphs.some(p => p.sentences.some(s => s.id === activeSentence.id))
+      if (!stillExists) {
+        setActiveSentence(null)
+        setActiveParagraphId(null)
+      }
+    }
   }
+
+  function handleSentenceSelect(sentence: SentenceItem | null) {
+    setActiveSentence(sentence)
+    if (!sentence) {
+      setActiveParagraphId(null)
+      return
+    }
+    // Find which paragraph contains this sentence
+    const paragraphs = getParagraphWorkspaces(content)
+    for (const p of paragraphs) {
+      if (p.sentences.some(s => s.id === sentence.id)) {
+        setActiveParagraphId(p.id)
+        return
+      }
+    }
+    setActiveParagraphId(null)
+  }
+
 
   function createDraft() {
     if (isDirty) {
       setPendingAction({ type: 'create' })
       return
     }
-
     navigate('/new-draft')
   }
 
   async function renameDraft() {
-    if (!draft || !titleDirty) {
-      return
-    }
-
+    if (!draft || !titleDirty) return
     const nextTitle = title.trim() || 'Untitled Draft'
-    const res = await api.patch<DraftDetail>(`/api/drafts/${draft.id}`, {
-      title: nextTitle,
-    })
-
+    const res = await api.patch<DraftDetail>(`/api/drafts/${draft.id}`, { title: nextTitle })
     setDraft(res.data)
     setSaveStatus(contentDirty ? 'unsaved' : 'saved')
     setTitle(res.data.title)
@@ -217,11 +244,7 @@ export default function Dashboard() {
   function confirmPendingAction() {
     const action = pendingAction
     setPendingAction(null)
-
-    if (!action) {
-      return
-    }
-
+    if (!action) return
     if (action.type === 'select') {
       navigate(`/dashboard/${action.draftId}`)
     } else {
@@ -229,40 +252,125 @@ export default function Dashboard() {
     }
   }
 
-  async function generateVariations() {
+  async function generateSingleVariation() {
     if (!activeSentence) return
-    setVariations(['Generating...'])
-    const results = await makeSentenceVariations(activeSentence.text)
-    setVariations(results)
-  }
 
-  function useVariation(text: string) {
-    if (!activeSentence) {
-      return
+    try {
+      const variation = await makeSentenceVariations(
+        activeSentence.text
+      )
+
+      setSentenceVariations(current => ({
+        ...current,
+        [activeSentence.id]: [
+          ...(current[activeSentence.id] ?? []),
+          variation,
+        ],
+      }))
+    } catch (error) {
+      console.error('Failed to generate variation', error)
     }
-
-    const sentences = docToSentenceItems(content)
-    const nextSentences = sentences.map((sentence) => (
-      sentence.id === activeSentence.id
-        ? { ...sentence, text }
-        : sentence
-    ))
-
-    setActiveSentence({ ...activeSentence, text })
-    handleContentChange(sentencesToDoc(nextSentences))
   }
+
+  function addVariation() {
+    if (!activeSentence) return
+
+    setSentenceVariations(current => ({
+      ...current,
+      [activeSentence.id]: [
+        ...(current[activeSentence.id] ?? []),
+        '',
+      ],
+    }))
+  }
+
+  function deleteVariation(index: number) {
+    if (!activeSentence) return
+
+    setSentenceVariations(current => ({
+      ...current,
+      [activeSentence.id]:
+        (current[activeSentence.id] ?? []).filter(
+          (_, i) => i !== index
+        ),
+    }))
+  }
+  
+  function replaceCurrentSentence(newText: string) {
+    console.log('REPLACE CLICKED')
+    console.log('activeSentence', activeSentence)
+    console.log('content before', content)
+    if (!activeSentence || !activeParagraphId) return
+
+    const paragraphs = getParagraphWorkspaces(content)
+
+    const targetParagraph = paragraphs.find(
+      p => p.id === activeParagraphId
+    )
+
+    if (!targetParagraph) return
+
+    const updatedSentences = targetParagraph.sentences.map(sentence =>
+        sentence.id === activeSentence.id
+          ? { ...sentence, text: newText }
+          : sentence
+      )
+
+      console.log('activeSentence.id', activeSentence.id)
+      console.log('activeParagraphId', activeParagraphId)
+
+      targetParagraph.sentences.forEach(s => {
+        console.log('paragraph sentence', s.id, s.text)
+      })
+
+      console.log('updatedSentences', updatedSentences)
+
+    const newDoc = updateParagraphSentences(
+      content,
+      targetParagraph.headingId,
+      updatedSentences
+    )
+
+    handleContentChange(newDoc)
+    console.log('newDoc', newDoc)
+
+    setActiveSentence({
+      ...activeSentence,
+      text: newText,
+    })
+  }
+
+  // function useVariation(paragraphId: string, sentenceId: string, newText: string) {
+  //   const paragraphs = getParagraphWorkspaces(content)
+  //   const targetParagraph = paragraphs.find(p => p.id === paragraphId)
+  //   if (!targetParagraph) return
+
+  //   const updatedSentences = targetParagraph.sentences.map(s =>
+  //     s.id === sentenceId ? { ...s, text: newText } : s
+  //   )
+
+  //   const newDoc = updateParagraphSentences(content, targetParagraph.headingId, updatedSentences)
+  //   handleContentChange(newDoc)
+  //   // Update active sentence reference
+  //   if (activeSentence && activeSentence.id === sentenceId) {
+  //     setActiveSentence({ ...activeSentence, text: newText })
+  //   }
+  // }
 
   function updateVariation(index: number, text: string) {
-    setVariations((current) => current.map((variation, currentIndex) => (
-      currentIndex === index ? text : variation
-    )))
+    if (!activeSentence) return
+
+    setSentenceVariations(current => ({
+      ...current,
+      [activeSentence.id]:
+        (current[activeSentence.id] ?? []).map(
+          (v, i) => (i === index ? text : v)
+        ),
+    }))
   }
 
   function addOutline(level: number, afterBlockIndex?: number) {
-    if (!confirmStructuralEdit()) {
-      return
-    }
-
+    if (!confirmStructuralEdit()) return
     handleContentChange(addOutlineHeading(content, level, afterBlockIndex))
   }
 
@@ -271,71 +379,42 @@ export default function Dashboard() {
   }
 
   function moveOutline(fromBlockIndex: number, toBlockIndex: number) {
-    if (!confirmStructuralEdit()) {
-      return
-    }
-
+    if (!confirmStructuralEdit()) return
     handleContentChange(moveOutlineBlock(content, fromBlockIndex, toBlockIndex))
   }
 
   function deleteOutline(blockIndex: number) {
-    if (!confirmStructuralEdit()) {
-      return
-    }
-
+    if (!confirmStructuralEdit()) return
     handleContentChange(deleteOutlineBlock(content, blockIndex))
   }
 
   function confirmStructuralEdit() {
-    if (workflowStage === 'draft' || countWords(content) === 0) {
-      return true
-    }
-
+    if (workflowStage === 'draft' || countWords(content) === 0) return true
     return window.confirm('This changes your outline structure and linked paragraph order. Continue?')
   }
 
   async function requestStageChange(nextStage: WorkflowStage) {
     setWorkflowStage(nextStage)
-
-    if (nextStage === 'editing') {
-      setMode('editing')
-      return
-    }
-
-    if (nextStage === 'draft') {
-      setMode('production')
-      return
-    }
-
-    if (nextStage === 'export') {
-      setMode('preview')
-    }
+    if (nextStage === 'editing') setMode('editing')
+    else if (nextStage === 'draft') setMode('production')
+    else if (nextStage === 'export') setMode('preview')
   }
 
   async function copyDraftToClipboard() {
-    if (!draft) {
-      return
-    }
-
+    if (!draft) return
     await navigator.clipboard.writeText(`${title}\n\n${docToText(content)}`)
   }
 
   function exportDraft(format: string) {
-    if (!draft || !format) {
-      return
-    }
-
+    if (!draft) return
     if (format === 'copy') {
       void copyDraftToClipboard()
       return
     }
-
     const safeTitle = title.trim().replace(/[^\w-]+/g, '-').replace(/^-|-$/g, '') || 'flowdraft'
-
     if (format === 'docx') {
       downloadBlob(`${safeTitle}.docx`, buildDocxBlob(title, content))
     }
-
     if (format === 'pdf') {
       const element = document.createElement('div')
       element.style.padding = '40px'
@@ -346,11 +425,11 @@ export default function Dashboard() {
       element.innerHTML = `
         <h1 style="font-size: 28px; margin-bottom: 24px;">${title}</h1>
         ${docToPreviewBlocks(content).map((block: any) => {
-          if (block.type === 'heading') return `<h${block.level + 1} style="margin-top: 24px; font-weight: bold; font-size: ${block.level === 1 ? '24px' : '20px'};">${block.text}</h${block.level + 1}>`
+          if (block.type === 'heading')
+            return `<h${block.level + 1} style="margin-top: 24px; font-weight: bold; font-size: ${block.level === 1 ? '24px' : '20px'};">${block.text}</h${block.level + 1}>`
           return `<p style="margin-bottom: 12px; font-size: 16px; line-height: 1.6;">${block.text}</p>`
         }).join('')}
       `
-      
       html2pdf().set({
         margin: 10,
         filename: `${safeTitle}.pdf`,
@@ -368,10 +447,10 @@ export default function Dashboard() {
 
   return (
     <div className={`app-shell${focusMode ? ' is-focus-mode' : ''}`}>
-      {/* Sidebar with dynamic full-width behavior */}
       <div className={`sidebar-wrapper ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
         <Sidebar
           activeSentence={activeSentence}
+          activeParagraphId={activeParagraphId}
           collapsed={sidebarCollapsed}
           mode={mode}
           outlineItems={outlineItems}
@@ -379,12 +458,14 @@ export default function Dashboard() {
           onAddOutline={addOutline}
           onCollapseChange={setSidebarCollapsed}
           onCreateDraft={createDraft}
-          onGenerateVariations={generateVariations}
           onMoveOutline={moveOutline}
           onRenameOutline={renameOutline}
           onDeleteOutline={deleteOutline}
-          onUseVariation={useVariation}
+          onUseVariation={replaceCurrentSentence}
           onVariationChange={updateVariation}
+          onAddVariation={addVariation}
+          onDeleteVariation={deleteVariation}
+          onGenerateSingleVariation={generateSingleVariation}
         />
       </div>
 
@@ -402,11 +483,11 @@ export default function Dashboard() {
                 <Menu size={17} />
               </button>
             )}
-            <button 
-              className="project-back-button" 
-              type="button" 
-              aria-label="Back to projects" 
-              title="Back to projects list" 
+            <button
+              className="project-back-button"
+              type="button"
+              aria-label="Back to projects"
+              title="Back to projects list"
               onClick={() => navigate('/projects')}
             >
               <ArrowLeft size={17} />
@@ -422,9 +503,7 @@ export default function Dashboard() {
                 setSaveStatus('unsaved')
               }}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.currentTarget.blur()
-                }
+                if (event.key === 'Enter') event.currentTarget.blur()
               }}
             />
           </div>
@@ -436,12 +515,12 @@ export default function Dashboard() {
               </span>
             )}
 
-            <button 
-              className="icon-button" 
-              type="button" 
-              aria-label="Version history" 
-              title="Version History" 
-              disabled={!draft} 
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Version history"
+              title="Version History"
+              disabled={!draft}
               onClick={() => setShowVersions(!showVersions)}
             >
               <History size={17} />
@@ -541,7 +620,7 @@ export default function Dashboard() {
             focusMode={focusMode}
             mode={mode}
             onContentChange={handleContentChange}
-            onSentenceSelect={setActiveSentence}
+            onSentenceSelect={handleSentenceSelect}
             onFocusModeToggle={() => setFocusMode((f) => !f)}
           />
         ) : (
@@ -606,12 +685,16 @@ export default function Dashboard() {
             setSavedContentKey(serializeDoc(nextContent))
             setUpdatedAt(restoredDraft.updatedAt)
             setSaveStatus('saved')
+            setActiveSentence(null)
+            setActiveParagraphId(null)
           }}
         />
       )}
     </div>
   )
 }
+
+
 
 function isConflictError(error: unknown) {
   return Boolean(

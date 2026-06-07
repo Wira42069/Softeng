@@ -7,9 +7,13 @@ import { Prisma } from '@prisma/client'
 import { toNodeHandler } from 'better-auth/node'
 import { auth } from './lib/auth.ts'
 import { prisma } from './lib/prisma.ts'
+import Groq from 'groq-sdk'
 
 const app = express()
 const PORT = process.env.PORT || 3000
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+})
 
 // Middleware
 app.use(helmet())
@@ -339,6 +343,44 @@ app.patch('/api/drafts/:id', async (req, res) => {
       data: { title },
     })
     res.json(draft)
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+app.post('/api/rewrite', async (req, res) => {
+  try {
+    const { sentence } = req.body
+
+    if (!sentence) {
+      return res.status(400).json({
+        error: 'Sentence required',
+      })
+    }
+
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Rewrite the sentence while preserving meaning. Return only the rewritten sentence.',
+        },
+        {
+          role: 'user',
+          content: sentence,
+        },
+      ],
+      temperature: 0.9,
+      max_completion_tokens: 120,
+    })
+
+    const variation =
+      completion.choices[0]?.message?.content?.trim() ?? sentence
+
+    res.json({
+      variation,
+    })
   } catch (error) {
     handleError(res, error)
   }

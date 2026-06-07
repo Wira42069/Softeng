@@ -567,15 +567,15 @@ h3 {
 }
 
 .sentence-block {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 36px;
-  gap: 10px;
-  border: 1px solid var(--line);
-  border-left-width: 6px;
-  border-radius: 8px;
-  padding: 12px;
-  background: var(--panel);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+  transition: all 0.15s ease;
 }
 
 .sentence-tone-0 { border-left-color: #1f7a6d; }
@@ -585,19 +585,25 @@ h3 {
 .sentence-tone-4 { border-left-color: #7f596e; }
 
 .sentence-block.is-active {
-  outline: 2px solid var(--accent);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
 }
 
 .sentence-block textarea,
 .variation-card textarea {
-  width: 100%;
-  border: 0;
+  flex: 1;
+  min-height: 2.5rem;
   resize: vertical;
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  padding: 0.25rem 0;
+  border: none;
   background: transparent;
-  color: var(--ink);
-  line-height: 1.55;
+}
+
+.sentence-textarea:focus {
   outline: none;
-  white-space: pre-wrap;
 }
 
 .sentence-preview {

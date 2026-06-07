@@ -7,6 +7,7 @@ import type { EditorMode, OutlineItem, SentenceItem } from '../types'
 
 interface SidebarProps {
   activeSentence: SentenceItem | null
+  activeParagraphId: string | null       
   collapsed: boolean
   mode: EditorMode
   outlineItems: OutlineItem[]
@@ -15,15 +16,18 @@ interface SidebarProps {
   onDeleteOutline: (blockIndex: number) => void
   onCollapseChange: (collapsed: boolean) => void
   onCreateDraft: () => void
-  onGenerateVariations: () => void
   onMoveOutline: (fromBlockIndex: number, toBlockIndex: number) => void
   onRenameOutline: (blockIndex: number, title: string) => void
-  onUseVariation: (text: string) => void
+  onUseVariation: (newText: string) => void   
   onVariationChange: (index: number, text: string) => void
+  onAddVariation: () => void
+  onDeleteVariation: (index: number) => void
+  onGenerateSingleVariation: () => void
 }
 
 export default function Sidebar({
   activeSentence,
+  activeParagraphId,
   collapsed,
   mode,
   outlineItems,
@@ -32,11 +36,13 @@ export default function Sidebar({
   onDeleteOutline,
   onCollapseChange,
   onCreateDraft,
-  onGenerateVariations,
+  onGenerateSingleVariation,
   onMoveOutline,
   onRenameOutline,
   onUseVariation,
   onVariationChange,
+  onAddVariation,
+  onDeleteVariation,
 }: SidebarProps) {
   return (
     <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''}`}>
@@ -56,18 +62,21 @@ export default function Sidebar({
         </button>
       </header>
 
-      {/* hide body sections when collapsed to allow smooth width transition */}
       {!collapsed && (
         mode === 'editing' ? (
           <EditingAssistant
             activeSentence={activeSentence}
+            activeParagraphId={activeParagraphId}
             variations={variations}
-            onGenerateVariations={onGenerateVariations}
             onUseVariation={onUseVariation}
             onVariationChange={onVariationChange}
+            onAddVariation={onAddVariation}
+            onDeleteVariation={onDeleteVariation}
+            onGenerateSingleVariation={onGenerateSingleVariation}
           />
         ) : (
           <>
+          
             <section className="sidebar-section sidebar-project-action">
               <button className="primary-action" type="button" onClick={onCreateDraft}>
                 <FilePlus2 size={16} />
@@ -110,6 +119,7 @@ function OutlineManager({
       setActiveOutlineId(outlineItems[0]?.id ?? null)
     }
   }, [activeOutlineId, outlineItems])
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -120,18 +130,10 @@ function OutlineManager({
   function handleDragEnd(event: DragEndEvent) {
     const activeId = String(event.active.id)
     const overId = event.over ? String(event.over.id) : null
-
-    if (!overId || activeId === overId) {
-      return
-    }
-
+    if (!overId || activeId === overId) return
     const activeItem = outlineItems.find((item) => item.id === activeId)
     const overItem = outlineItems.find((item) => item.id === overId)
-
-    if (!activeItem || !overItem) {
-      return
-    }
-
+    if (!activeItem || !overItem) return
     onMoveOutline(activeItem.blockIndex, overItem.blockIndex)
   }
 
@@ -266,16 +268,22 @@ function SortableOutlineItem({
 
 function EditingAssistant({
   activeSentence,
+  activeParagraphId,
   variations,
-  onGenerateVariations,
   onUseVariation,
   onVariationChange,
+  onAddVariation,
+  onDeleteVariation,
+  onGenerateSingleVariation
 }: {
   activeSentence: SentenceItem | null
+  activeParagraphId: string | null
   variations: string[]
-  onGenerateVariations: () => void
-  onUseVariation: (text: string) => void
+  onUseVariation: (newText: string) => void
   onVariationChange: (index: number, text: string) => void
+  onAddVariation: () => void
+  onDeleteVariation: (index: number) => void
+  onGenerateSingleVariation: () => void
 }) {
   return (
     <section className="sidebar-section assistant-section">
@@ -283,25 +291,54 @@ function EditingAssistant({
       <div className="selected-sentence">
         {activeSentence?.text || 'Select a highlighted sentence in the editor.'}
       </div>
+      <button
+        type="button"
+        className='primary-action'
+        onClick={onAddVariation}
+      >
+        Add Variation
+      </button>
 
-      <button className="primary-action" type="button" disabled={!activeSentence} onClick={onGenerateVariations}>
+      <button className="primary-action" type="button" disabled={!activeSentence} onClick={onGenerateSingleVariation}>
         <Sparkles size={16} />
-        Generate Variations
+        Generate AI Variations 
       </button>
 
       <div className="variation-list">
         {variations.map((variation, index) => (
-          <article key={`${index}-${variation.slice(0, 12)}`} className="variation-card">
-            <textarea
-              aria-label={`Variation ${index + 1}`}
-              rows={4}
-              value={variation}
-              onChange={(event) => onVariationChange(index, event.target.value)}
-            />
-            <button type="button" onClick={() => onUseVariation(variation)}>
+          <article key={index} className="variation-card">
+
+          <textarea
+            rows={4}
+            value={variation}
+            onChange={(e) =>
+              onVariationChange(index, e.target.value)
+            }
+          />
+
+          <div className="variation-actions">
+
+            <button
+              type="button"
+              onClick={() =>
+                onUseVariation(variation)
+              }
+            >
               Replace Sentence
             </button>
-          </article>
+
+            <button
+              type="button"
+              onClick={() =>
+                onDeleteVariation(index)
+              }
+            >
+              Delete
+            </button>
+
+          </div>
+
+        </article>
         ))}
       </div>
     </section>
