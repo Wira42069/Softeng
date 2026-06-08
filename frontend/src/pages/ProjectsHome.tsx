@@ -82,6 +82,12 @@ function formatDeadline(deadline?: string | null) {
   return formatDate(deadline)
 }
 
+function formatWordCount(words: number) {
+  if (words === 0) return 'Empty'
+  if (words === 1) return '1 word'
+  return `${words.toLocaleString()} words`
+}
+
 function parseDeadline(deadline?: string | null) {
   if (!deadline) {
     return null
@@ -165,6 +171,24 @@ export default function ProjectsHome() {
 
   function handleCreateDraft() {
     navigate('/new-draft')
+  }
+
+  async function handleCreateBlankDraft() {
+    try {
+      const res = await api.post('/api/drafts', {
+        title: 'Untitled Draft',
+        topic: '',
+        deadline: null,
+        content: {
+          type: 'doc',
+          content: [],
+        },
+      })
+
+      navigate(`/dashboard/${res.data.id}`)
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   async function handleLogout() {
@@ -282,6 +306,8 @@ export default function ProjectsHome() {
       </div>
     )
   }
+
+  console.log("Project home drafts:", drafts)
 
   return (
     <div className="projects-shell">
@@ -511,8 +537,18 @@ export default function ProjectsHome() {
             </div>
           ) : (
             <div className="projects-grid">
+              <article
+                className="project-card create-draft-card"
+                onClick={() => void handleCreateBlankDraft()}
+              >
+                <div className="project-card-body create-draft-body">
+                  <FilePlus2 size={40} />
+                  <h4>Blank Draft</h4>
+                  <p>Start writing immediately</p>
+                </div>
+              </article>
               {filteredDrafts.map((draft, index) => {
-                const { label: progressLabel, pct: progress } = getActivityStage(draft)
+                const wordLabel = getActivityStage(draft).label
                 const accentColor = getAccentColor(draft, index)
 
                 return (
@@ -545,7 +581,7 @@ export default function ProjectsHome() {
                       <div className="project-card-meta">
                         <div className="project-card-progress-row">
                           <span className="project-card-progress-label">
-                            {progressLabel}
+                            {wordLabel}
                           </span>
                           <div className="project-card-avatars">
                             <div
@@ -556,17 +592,9 @@ export default function ProjectsHome() {
                             </div>
                           </div>
                         </div>
-                        {progress > 0 && (
-                          <div className="project-card-progress-bar">
-                            <div
-                              className="project-card-progress-fill"
-                              style={{
-                                width: `${progress}%`,
-                                backgroundColor: accentColor,
-                              }}
-                            />
+                        <div className="project-card-wordcount">
+                            {draft.wordCount?.toLocaleString() ?? 0} words
                           </div>
-                        )}
                       </div>
 
                       <div className="project-card-footer">

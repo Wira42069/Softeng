@@ -41,11 +41,12 @@ export interface TipTapDoc {
 export interface DraftSummary {
   id: string
   title: string
-  updatedAt: string
-  createdAt: string
   topic?: string | null
   deadline?: string | null
   starred: boolean
+  createdAt: string
+  updatedAt: string
+  wordCount: number
 }
 
 export interface DraftDetail extends DraftSummary {

@@ -112,6 +112,29 @@ app.patch('/api/me', async (req, res) => {
   }
 })
 
+
+// ── Helpers for drafts ────────────────────────────────────────────────────
+
+function extractText(nodes: any[] = []): string {
+  return nodes
+    .map(node =>
+      node.type === 'text'
+        ? node.text ?? ''
+        : extractText(node.content)
+    )
+    .join(' ')
+}
+
+function countWords(doc: any): number {
+  const text = extractText(doc?.content ?? [])
+
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .length
+}
+
 // ── Drafts ─────────────────────────────────────────────────────────────────
 
 app.get('/api/drafts', async (req, res) => {
@@ -124,10 +147,21 @@ app.get('/api/drafts', async (req, res) => {
       orderBy: { updatedAt: 'desc' },
       select: {
         id: true, title: true, updatedAt: true, createdAt: true,
-        topic: true, deadline: true, starred: true,
+        topic: true, deadline: true, starred: true, content: true,
       },
     })
-    res.json(drafts)
+    res.json(
+      drafts.map(draft => ({
+        id: draft.id,
+        title: draft.title,
+        updatedAt: draft.updatedAt,
+        createdAt: draft.createdAt,
+        topic: draft.topic,
+        deadline: draft.deadline,
+        starred: draft.starred,
+        wordCount: countWords(draft.content),
+      }))
+    )
   } catch (error) {
     handleError(res, error)
   }
