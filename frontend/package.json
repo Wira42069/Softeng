@@ -22,6 +22,7 @@
     "@tiptap/react": "^3.23.4",
     "@tiptap/starter-kit": "^3.23.4",
     "axios": "^1.16.1",
+    "docx": "^9.7.1",
     "html2pdf.js": "^0.14.0",
     "lucide-react": "^1.14.0",
     "react": "^19.2.6",

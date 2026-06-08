@@ -12,6 +12,8 @@ interface SidebarProps {
   mode: EditorMode
   outlineItems: OutlineItem[]
   variations: string[]
+  sidebarWidth: number
+  onSidebarWidthChange: (width: number) => void
   onAddOutline: (level: number, afterBlockIndex?: number) => void
   onDeleteOutline: (blockIndex: number) => void
   onCollapseChange: (collapsed: boolean) => void
@@ -32,6 +34,8 @@ export default function Sidebar({
   mode,
   outlineItems,
   variations,
+  sidebarWidth,
+  onSidebarWidthChange,
   onAddOutline,
   onDeleteOutline,
   onCollapseChange,
@@ -44,8 +48,66 @@ export default function Sidebar({
   onAddVariation,
   onDeleteVariation,
 }: SidebarProps) {
+
+  function startResize(
+    event: React.MouseEvent<HTMLDivElement>
+  ) {
+    event.preventDefault()
+
+    const startX = event.clientX
+    const startWidth = sidebarWidth
+
+    function onMouseMove(
+      moveEvent: MouseEvent
+    ) {
+      const nextWidth =
+        startWidth +
+        (moveEvent.clientX - startX)
+
+      onSidebarWidthChange(
+        Math.max(
+          240,
+          Math.min(nextWidth, 700)
+        )
+      )
+    }
+
+    function onMouseUp() {
+      document.removeEventListener(
+        'mousemove',
+        onMouseMove
+      )
+
+      document.removeEventListener(
+        'mouseup',
+        onMouseUp
+      )
+    }
+
+    document.addEventListener(
+      'mousemove',
+      onMouseMove
+    )
+
+    document.addEventListener(
+      'mouseup',
+      onMouseUp
+    )
+  }
   return (
-    <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''}`}>
+    <aside
+      className={`sidebar ${
+        collapsed ? 'is-collapsed' : ''
+      }`}
+      style={
+        collapsed
+          ? undefined
+          : {
+              width: `${sidebarWidth}px`,
+              minWidth: `${sidebarWidth}px`,
+            }
+      }
+    >
       <header className="sidebar-header">
         <div className="sidebar-brand">
           <span className="sidebar-logo">📝</span>
@@ -92,6 +154,12 @@ export default function Sidebar({
             />
           </>
         )
+      )}
+      {!collapsed && (
+        <div
+          className="sidebar-resizer"
+          onMouseDown={startResize}
+        />
       )}
     </aside>
   )
@@ -164,16 +232,6 @@ function OutlineManager({
                 }}
               >
                 Chapter
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  onAddOutline(2, activeOutlineItem?.blockIndex)
-                  setAddMenuOpen(false)
-                }}
-              >
-                Subchapter
               </button>
             </div>
           )}

@@ -78,7 +78,8 @@ textarea:disabled {
 }
 
 .app-shell.is-focus-mode .full-bleed-editor {
-  max-width: 760px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
   padding-top: 56px;
 }
@@ -111,6 +112,21 @@ textarea:disabled {
 
 .sidebar {
   border-right: 1px solid var(--line);
+  position: relative;
+}
+
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 100;
+}
+
+.sidebar-resizer:hover {
+  background: rgba(255,255,255,0.08);
 }
 
 .sidebar.is-collapsed {

@@ -18,7 +18,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Trash2 } from 'lucide-react'
 import {
-  docToPreviewBlocks,
+  docToHtml,
   getParagraphWorkspaces,
   updateParagraphSentences,
   removeParagraphByHeading
@@ -96,8 +96,17 @@ function SentenceEditor({
     }),
   )
 
-  function updateParagraph(headingId: string, sentences: SentenceItem[]) {
-    onContentChange(updateParagraphSentences(content, headingId, sentences))
+  function updateParagraph(
+    headingId: string,
+    sentences: SentenceItem[],
+  ) {
+    onContentChange(
+      updateParagraphSentences(
+        content,
+        headingId,
+        sentences,
+      ),
+    )
   }
 
   function handleDragEnd(
@@ -106,12 +115,42 @@ function SentenceEditor({
     sentences: SentenceItem[],
   ) {
     const activeId = String(event.active.id)
-    const overId = event.over?.id ? String(event.over.id) : null
-    if (!overId || activeId === overId) return
-    const oldIndex = sentences.findIndex(s => s.id === activeId)
-    const newIndex = sentences.findIndex(s => s.id === overId)
-    if (oldIndex === -1 || newIndex === -1) return
-    updateParagraph(headingId, arrayMove(sentences, oldIndex, newIndex))
+    const overId = event.over?.id
+      ? String(event.over.id)
+      : null
+
+    if (!overId || activeId === overId) {
+      return
+    }
+
+    const oldIndex = sentences.findIndex(
+      s => s.id === activeId,
+    )
+
+    const newIndex = sentences.findIndex(
+      s => s.id === overId,
+    )
+
+    if (
+      oldIndex === -1 ||
+      newIndex === -1
+    ) {
+      return
+    }
+
+    const reordered = arrayMove(
+      sentences,
+      oldIndex,
+      newIndex,
+    ).map((sentence, index) => ({
+      ...sentence,
+      sentenceIndex: index,
+    }))
+
+    updateParagraph(
+      headingId,
+      reordered,
+    )
   }
 
   function updateSentence(
@@ -122,70 +161,138 @@ function SentenceEditor({
   ) {
     updateParagraph(
       headingId,
-      sentences.map(s => (s.id === sentenceId ? { ...s, text } : s)),
+      sentences.map(sentence =>
+        sentence.id === sentenceId
+          ? {
+              ...sentence,
+              text,
+            }
+          : sentence,
+      ),
     )
   }
 
-  function deleteSentence(headingId: string, sentenceId: string, sentences: SentenceItem[]) {
-    const newSentences = sentences.filter(s => s.id !== sentenceId)
-    if (newSentences.length === 0) {
-      onContentChange(removeParagraphByHeading(content, headingId))
+  function deleteSentence(
+    headingId: string,
+    sentenceId: string,
+    sentences: SentenceItem[],
+  ) {
+    const filtered = sentences
+      .filter(
+        s => s.id !== sentenceId,
+      )
+      .map((s, index) => ({
+        ...s,
+        sentenceIndex: index,
+      }))
+
+    if (!filtered.length) {
+      onContentChange(
+        removeParagraphByHeading(
+          content,
+          headingId,
+        ),
+      )
     } else {
-      updateParagraph(headingId, newSentences)
+      updateParagraph(
+        headingId,
+        filtered,
+      )
     }
-    if (activeSentenceId === sentenceId) onSentenceSelect(null)
+
+    if (
+      activeSentenceId === sentenceId
+    ) {
+      onSentenceSelect(null)
+    }
   }
 
   if (!paragraphs.length) {
     return (
       <section className="workspace-panel sentence-empty">
-        Add a few sentences in Production mode, then return here to refine them.
+        Add a few sentences in Production
+        mode, then return here to
+        refine them.
       </section>
     )
   }
-  useEffect(() => {
-    console.log('SentenceEditor content changed:', content)
-  }, [content])
 
   return (
     <section className="workspace-panel sentence-stage">
       {paragraphs.map(p => (
-        <article key={p.id} className="sentence-paragraph-group">
+        <article
+          key={p.id}
+          className="sentence-paragraph-group"
+        >
           <header className="sentence-paragraph-header">
             <span className="paragraph-index">
-              {p.level === 1 ? 'Chapter' : 'Subchapter'}
+              {p.level === 1
+                ? 'Chapter'
+                : 'Subchapter'}
             </span>
+
             <h3>{p.title}</h3>
           </header>
 
           {!p.sentences.length ? (
             <p className="muted-copy inline-muted">
-              No sentences in this paragraph yet.
+              No sentences in this
+              paragraph yet.
             </p>
           ) : (
             <DndContext
               sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={(e) => handleDragEnd(e, p.headingId, p.sentences)}
+              collisionDetection={
+                closestCenter
+              }
+              onDragEnd={event =>
+                handleDragEnd(
+                  event,
+                  p.headingId,
+                  p.sentences,
+                )
+              }
             >
               <SortableContext
-                items={p.sentences.map(s => s.id)}
-                strategy={verticalListSortingStrategy}
+                items={p.sentences.map(
+                  s => s.id,
+                )}
+                strategy={
+                  verticalListSortingStrategy
+                }
               >
-                {p.sentences.map(s => (
-                  <SortableSentence
-                    key={s.id}
-                    sentence={s}
-                    active={s.id === activeSentenceId}
-                    onChange={(text) =>
-                      updateSentence(p.headingId, s.id, text, p.sentences)
-                    }
-                    onDelete={() =>
-                      deleteSentence(p.headingId, s.id, p.sentences)
-                    }
-                    onSelect={onSentenceSelect}
-                  />
-                ))}
+                {p.sentences.map(
+                  sentence => (
+                    <SortableSentence
+                      key={sentence.id}
+                      sentence={
+                        sentence
+                      }
+                      active={
+                        sentence.id ===
+                        activeSentenceId
+                      }
+                      onChange={text =>
+                        updateSentence(
+                          p.headingId,
+                          sentence.id,
+                          text,
+                          p.sentences,
+                        )
+                      }
+                      onDelete={() =>
+                        deleteSentence(
+                          p.headingId,
+                          sentence.id,
+                          p.sentences,
+                        )
+                      }
+                      onSelect={
+                        onSentenceSelect
+                      }
+                    />
+                  ),
+                )}
               </SortableContext>
             </DndContext>
           )}
@@ -266,24 +373,18 @@ function SortableSentence({
 /* Preview                                                           */
 /* ------------------------------------------------------------------ */
 
-function PreviewPane({ content }: { content: TipTapDoc }) {
-  const blocks = docToPreviewBlocks(content)
+function PreviewPane({
+  content,
+}: {
+  content: TipTapDoc
+}) {
   return (
     <section className="workspace-panel preview-pane">
-      {!blocks.length && (
-        <p className="preview-empty">Nothing to preview yet.</p>
-      )}
-      {blocks.map(b =>
-        b.type === 'heading' ? (
-          b.level === 1 ? (
-            <h1 key={b.id}>{b.text}</h1>
-          ) : (
-            <h2 key={b.id}>{b.text}</h2>
-          )
-        ) : (
-          <p key={b.id}>{b.text}</p>
-        ),
-      )}
+      <div
+        dangerouslySetInnerHTML={{
+          __html: docToHtml(content),
+        }}
+      />
     </section>
   )
 }

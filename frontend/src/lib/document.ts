@@ -1,3 +1,11 @@
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+} from 'docx'
+
 import type {
   OutlineItem,
   ParagraphWorkspaceItem,
@@ -25,7 +33,9 @@ export function normalizeDoc(value: unknown): TipTapDoc {
     (value as TipTapDoc).type === 'doc' &&
     Array.isArray((value as TipTapDoc).content)
   ) {
-    return sanitizeDoc(value as TipTapDoc)
+    const result = sanitizeDoc(value as TipTapDoc)
+    console.log('normalizeDoc output:', result)
+    return result
   }
   return emptyDoc
 }
@@ -38,7 +48,7 @@ export function ensureParagraphWorkspaces(doc: TipTapDoc): TipTapDoc {
     if (node.type === 'heading') {
       const nextNode = doc.content[i + 1]
       if (!nextNode || nextNode.type !== 'paragraph') {
-        newContent.push({ type: 'paragraph', content: [{ type: 'text', text: '' }] })
+        newContent.push({ type: 'paragraph', content: [] })
       }
     }
   }
@@ -73,13 +83,27 @@ export function serializeDoc(doc: TipTapDoc): string {
 export function docToSentenceItems(doc: TipTapDoc): SentenceItem[] {
   const sentences: SentenceItem[] = []
   let idCounter = 0
+  let paragraphIndex = 0
+
   for (const node of doc.content) {
     if (node.type === 'paragraph') {
       const text = collectText(node.content)
-      const rawSentences = splitToSentences(text, 'doc')
-      for (const s of rawSentences) {
-        sentences.push({ id: `sent-${idCounter++}`, text: s.text })
-      }
+
+      const rawSentences =
+        splitToSentences(text, `paragraph-${paragraphIndex}`, paragraphIndex,)
+
+      rawSentences.forEach(
+        (s, sentenceIndex) => {
+          sentences.push({
+            id: `sent-${idCounter++}`,
+            text: s.text,
+            paragraphIndex,
+            sentenceIndex,
+          })
+        },
+      )
+
+      paragraphIndex++
     }
   }
   return sentences
@@ -136,7 +160,7 @@ export function extractOutline(doc: TipTapDoc): OutlineItem[] {
     const level = Number(node.attrs?.level ?? 1) || 1
     return {
       id,
-      title: collectText(node.content) || 'Untitled',
+      title: collectText(node.content).trim(),
       level,
       blockIndex: i,
     }
@@ -153,7 +177,7 @@ export function addOutlineHeading(doc: TipTapDoc, level: number, afterBlockIndex
   const insertIndex = afterBlockIndex !== undefined ? afterBlockIndex + 1 : doc.content.length
   const newContent = [...doc.content]
   newContent.splice(insertIndex, 0, newHeading)
-  newContent.splice(insertIndex + 1, 0, { type: 'paragraph', content: [{ type: 'text', text: '' }] })
+  newContent.splice(insertIndex + 1, 0, { type: 'paragraph', content: [] })
   return { type: 'doc', content: newContent }
 }
 
@@ -169,12 +193,71 @@ export function renameOutlineHeading(doc: TipTapDoc, blockIndex: number, newTitl
   return { type: 'doc', content: newContent }
 }
 
-export function moveOutlineBlock(doc: TipTapDoc, fromIndex: number, toIndex: number): TipTapDoc {
-  if (fromIndex === toIndex) return doc
-  const content = [...doc.content]
-  const [moved] = content.splice(fromIndex, 1)
-  content.splice(toIndex, 0, moved)
-  return { type: 'doc', content: content }
+export function moveOutlineBlock(
+  doc: TipTapDoc,
+  fromBlockIndex: number,
+  toBlockIndex: number,
+): TipTapDoc {
+  const sections: TipTapNode[][] = []
+
+  let i = 0
+
+  while (i < doc.content.length) {
+    const node = doc.content[i]
+
+    if (node.type !== 'heading') {
+      i++
+      continue
+    }
+
+    const section: TipTapNode[] = [node]
+
+    let j = i + 1
+
+    while (
+      j < doc.content.length &&
+      doc.content[j].type !== 'heading'
+    ) {
+      section.push(doc.content[j])
+      j++
+    }
+
+    sections.push(section)
+    i = j
+  }
+
+  const fromSectionIndex = sections.findIndex(
+    section =>
+      doc.content[fromBlockIndex] === section[0],
+  )
+
+  const toSectionIndex = sections.findIndex(
+    section =>
+      doc.content[toBlockIndex] === section[0],
+  )
+
+  if (
+    fromSectionIndex === -1 ||
+    toSectionIndex === -1
+  ) {
+    return doc
+  }
+
+  const [moved] = sections.splice(
+    fromSectionIndex,
+    1,
+  )
+
+  sections.splice(
+    toSectionIndex,
+    0,
+    moved,
+  )
+
+  return {
+    type: 'doc',
+    content: sections.flat(),
+  }
 }
 
 export function deleteOutlineBlock(doc: TipTapDoc, blockIndex: number): TipTapDoc {
@@ -193,42 +276,83 @@ function computeLengthStatus(wordCount: number): 'too-short' | 'optimal' | 'too-
   return 'optimal'
 }
 
-export function getParagraphWorkspaces(doc: TipTapDoc): ParagraphWorkspaceItem[] {
+export function getParagraphWorkspaces(
+  doc: TipTapDoc,
+): ParagraphWorkspaceItem[] {
   const result: ParagraphWorkspaceItem[] = []
+
   for (let i = 0; i < doc.content.length; i++) {
     const node = doc.content[i]
+
     if (node.type !== 'heading') continue
-    const headingId = String(node.attrs?.id ?? `heading-${i}`)
-    const level = Number(node.attrs?.level ?? 1) || 1
 
-    const paragraphNode = doc.content[i + 1]
-    if (!paragraphNode || paragraphNode.type !== 'paragraph') continue
+    const headingId = String(
+      node.attrs?.id ?? `heading-${i}`,
+    )
 
-    const paragraphText = collectText(paragraphNode.content)
-    let sentences: SentenceItem[] = []
+    const level =
+      Number(node.attrs?.level ?? 1) || 1
 
-    // Use stored sentences if available (preserves IDs)
-    const stored = paragraphNode.attrs?.sentenceItems as SentenceItem[] | undefined
-    if (stored && stored.length) {
-      sentences = stored
-    } else {
-      sentences = splitToSentences(paragraphText, headingId)
+    const sentences: SentenceItem[] = []
+
+    let combinedText = ''
+
+    let j = i + 1
+
+    while (
+      j < doc.content.length &&
+      doc.content[j].type !== 'heading'
+    ) {
+      const current = doc.content[j]
+
+      if (current.type === 'paragraph') {
+        const paragraphText =
+          collectText(current.content)
+
+        combinedText +=
+          (combinedText ? '\n\n' : '') +
+          paragraphText
+
+        const split =
+          splitToSentences(
+            paragraphText,
+            headingId,
+            j
+          )
+
+        split.forEach(
+          (sentence, sentenceIndex) => {
+            sentences.push({
+              ...sentence,
+              paragraphIndex: j,
+              sentenceIndex,
+            })
+          },
+        )
+      }
+
+      j++
     }
 
-    const wordCount = paragraphText.split(/\s+/).filter(Boolean).length
-    const lengthStatus = computeLengthStatus(wordCount)
+    const wordCount = combinedText
+      .split(/\s+/)
+      .filter(Boolean).length
+
+    const lengthStatus =
+      computeLengthStatus(wordCount)
 
     result.push({
       id: `paragraph-${headingId}`,
       headingId,
       title: collectText(node.content),
       level,
-      text: paragraphText,
+      text: combinedText,
       sentences,
       wordCount,
       lengthStatus,
     })
   }
+
   return result
 }
 
@@ -245,50 +369,51 @@ export function updateParagraphSentences(
   headingId: string,
   newSentences: SentenceItem[],
 ): TipTapDoc {
-  console.log('UPDATE PARAGRAPH')
-  console.log('headingId', headingId)
-
   const nodes = [...doc.content]
 
-  const headingIndex = nodes.findIndex(
-    n => n.type === 'heading' && n.attrs?.id === headingId
-  )
+  const grouped =
+    new Map<number, SentenceItem[]>()
 
-  console.log('headingIndex', headingIndex)
+  for (const sentence of newSentences) {
+    const current =
+      grouped.get(
+        sentence.paragraphIndex,
+      ) ?? []
 
-  if (headingIndex === -1) {
-    console.log('HEADING NOT FOUND')
-    return doc
+    current.push(sentence)
+
+    grouped.set(
+      sentence.paragraphIndex,
+      current,
+    )
   }
 
-  const paragraphIndex = headingIndex + 1
+  for (const [
+    paragraphIndex,
+    sentences,
+  ] of grouped) {
+    const text = sentences
+      .map(s => s.text.trim())
+      .filter(Boolean)
+      .join(' ')
 
-  console.log('paragraphIndex', paragraphIndex)
-  console.log('node', nodes[paragraphIndex])
-
-  const newText = newSentences
-    .map(s => s.text.trim())
-    .filter(Boolean)
-    .join(' ')
-
-  console.log('newText', newText)
-  console.log(
-    nodes
-      .filter(n => n.type === 'heading')
-      .map(n => n.attrs)
-  )
-  const updatedParagraph: TipTapNode = {
-    ...nodes[paragraphIndex],
-    content: newText ? [{ type: 'text', text: newText }] : [],
-    attrs: {
-      ...nodes[paragraphIndex].attrs,
-      sentenceItems: newSentences, // store for potential future use, but we ignore it in getParagraphWorkspaces
-    },
+    nodes[paragraphIndex] = {
+      ...nodes[paragraphIndex],
+      content: text
+        ? [
+            {
+              type: 'text',
+              text,
+            },
+          ]
+        : [],
+    }
   }
 
-  const newContent = [...nodes]
-  newContent[paragraphIndex] = updatedParagraph
-  return { type: 'doc', content: newContent }
+  return {
+    type: 'doc',
+    content: nodes,
+  }
 }
 
 export function updateParagraphText(
@@ -307,10 +432,6 @@ export function updateParagraphText(
   const updatedParagraph: TipTapNode = {
     ...nodes[paragraphIndex],
     content: text ? [{ type: 'text', text }] : [],
-    attrs: {
-      ...nodes[paragraphIndex].attrs,
-      sentenceItems: undefined, // ✅ forces fresh split in getParagraphWorkspaces
-    },
   }
 
   const newContent = [...nodes]
@@ -322,6 +443,57 @@ export function updateParagraphText(
 /* PREVIEW & EXPORT            */
 /* ---------------------------- */
 
+function tiptapNodeToHtml(
+  node: TipTapNode,
+): string {
+  if (node.type === 'text') {
+    let text = node.text ?? ''
+
+    if (node.marks?.some(m => m.type === 'bold')) {
+      text = `<strong>${text}</strong>`
+    }
+
+    if (node.marks?.some(m => m.type === 'italic')) {
+      text = `<em>${text}</em>`
+    }
+
+    return text
+  }
+
+  if (node.type === 'paragraph') {
+    return `<p>${
+      node.content
+        ?.map(tiptapNodeToHtml)
+        .join('') ?? ''
+    }</p>`
+  }
+
+  if (node.type === 'heading') {
+    const level =
+      Number(node.attrs?.level ?? 1)
+
+    return `<h${level}>${
+      node.content
+        ?.map(tiptapNodeToHtml)
+        .join('') ?? ''
+    }</h${level}>`
+  }
+
+  return (
+    node.content
+      ?.map(tiptapNodeToHtml)
+      .join('') ?? ''
+  )
+}
+
+export function docToHtml(
+  doc: TipTapDoc,
+): string {
+  return doc.content
+    .map(tiptapNodeToHtml)
+    .join('')
+}
+
 export function docToPreviewBlocks(doc: TipTapDoc): PreviewBlock[] {
   return doc.content.flatMap((node, i): PreviewBlock[] => {
     const text = collectText(node.content).trim()
@@ -332,11 +504,87 @@ export function docToPreviewBlocks(doc: TipTapDoc): PreviewBlock[] {
   })
 }
 
-export function buildDocxBlob(title: string, doc: TipTapDoc): Blob {
-  const content = `<html><body><h1>${title}</h1>${docToPreviewBlocks(doc).map(b => 
-    b.type === 'heading' ? `<h${b.level}>${b.text}</h${b.level}>` : `<p>${b.text}</p>`
-  ).join('')}</body></html>`
-  return new Blob([content], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+function nodeToRuns(node: TipTapNode): TextRun[] {
+  if (node.type === 'text') {
+    return [
+      new TextRun({
+        text: node.text ?? '',
+        bold: node.marks?.some(
+          mark => mark.type === 'bold',
+        ),
+        italics: node.marks?.some(
+          mark => mark.type === 'italic',
+        ),
+      }),
+    ]
+  }
+
+  return (
+    node.content?.flatMap(nodeToRuns) ?? []
+  )
+}
+
+export async function buildDocxBlob(
+  title: string,
+  doc: TipTapDoc,
+): Promise<Blob> {
+  const children: Paragraph[] = []
+
+  children.push(
+    new Paragraph({
+      heading: HeadingLevel.TITLE,
+      children: [new TextRun(title)],
+    }),
+  )
+
+  for (const node of doc.content) {
+    if (node.type === 'heading') {
+      const level =
+        Number(node.attrs?.level ?? 1)
+
+      const headingMap = {
+        1: HeadingLevel.HEADING_1,
+        2: HeadingLevel.HEADING_2,
+        3: HeadingLevel.HEADING_3,
+      }
+
+      children.push(
+        new Paragraph({
+          heading:
+            headingMap[
+              level as keyof typeof headingMap
+            ] ?? HeadingLevel.HEADING_1,
+          children:
+            node.content?.flatMap(
+              nodeToRuns,
+            ) ?? [],
+        }),
+      )
+
+      continue
+    }
+
+    if (node.type === 'paragraph') {
+      children.push(
+        new Paragraph({
+          children:
+            node.content?.flatMap(
+              nodeToRuns,
+            ) ?? [],
+        }),
+      )
+    }
+  }
+
+  const document = new Document({
+    sections: [
+      {
+        children,
+      },
+    ],
+  })
+
+  return await Packer.toBlob(document)
 }
 
 /* ---------------------------- */
@@ -362,7 +610,12 @@ function sanitizeNode(
   index = 0,
 ): TipTapNode | null {
   if (node.type === 'text') {
-    return node.text?.trim() ? node : null
+    if (!node.text?.length) return null
+
+    return {
+      ...node,
+      marks: node.marks,
+    }
   }
 
   if (node.type === 'heading') {

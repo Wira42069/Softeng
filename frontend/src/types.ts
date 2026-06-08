@@ -70,6 +70,9 @@ export interface SentenceItem {
   text: string
 
   variations?: SentenceVariation[]
+
+  paragraphIndex: number
+  sentenceIndex: number
 }
 
 export interface OutlineItem {

@@ -14,7 +14,11 @@ function isCapitalized(word: string): boolean {
 }
 
 
-export function splitToSentences(text: string, paragraphId: string): SentenceItem[] {
+export function splitToSentences(
+  text: string,
+  paragraphId: string,
+  paragraphIndex: number,
+): SentenceItem[] {
   if (!text.trim()) return []
 
   // Normalize quotes and ellipsis for consistent splitting
@@ -82,6 +86,11 @@ export function splitToSentences(text: string, paragraphId: string): SentenceIte
 
   return sentences.map((s, idx) => ({
     id: `${paragraphId}-${idx}-${simpleHash(s.slice(0, 20))}`,
-    text: s
+    text: s,
+
+    paragraphIndex,
+    sentenceIndex: idx,
+
+    variations: [],
   }))
 }

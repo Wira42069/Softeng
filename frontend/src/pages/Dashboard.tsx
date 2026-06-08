@@ -14,20 +14,17 @@ import {
   countWords,
   docToText,
   deleteOutlineBlock,
-  docToPreviewBlocks,
+  docToHtml,
   extractOutline,
   getParagraphWorkspaces,
   moveOutlineBlock,
   normalizeDoc,
   renameOutlineHeading,
   updateParagraphSentences,
-  updateParagraphText,
   emptyDoc,
   serializeDoc,
   countCharacters,
   ensureParagraphWorkspaces,
-  docToSentenceItems,
-  sentencesToDoc,
   makeSentenceVariations,
 } from '../lib/document'
 
@@ -39,7 +36,6 @@ import type {
   TipTapDoc,
   EditorMode,
   WorkflowStage,
-  ParagraphWorkspaceItem,
 } from '../types'
 
 type PendingAction =
@@ -58,6 +54,7 @@ export default function Dashboard() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [savedContentKey, setSavedContentKey] = useState(serializeDoc(emptyDoc))
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
+  const [sidebarWidth, setSidebarWidth] = useState(320)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showVersions, setShowVersions] = useState(false)
   const [title, setTitle] = useState('Untitled Draft')
@@ -175,7 +172,10 @@ export default function Dashboard() {
         lastKnownUpdatedAt: overwriteConflict ? undefined : updatedAt,
       })
       const savedDoc = normalizeDoc(res.data.draft.content)
-      setContent(savedDoc)
+      setDraft(res.data.draft)
+      setSavedContentKey(
+        serializeDoc(savedDoc),
+      )
       setDraft(res.data.draft)
       setSavedContentKey(serializeDoc(savedDoc))
       setSaveStatus('saved')
@@ -204,21 +204,27 @@ export default function Dashboard() {
     }
   }
 
-  function handleSentenceSelect(sentence: SentenceItem | null) {
+  function handleSentenceSelect(
+    sentence: SentenceItem | null,
+  ) {
     setActiveSentence(sentence)
+
     if (!sentence) {
       setActiveParagraphId(null)
       return
     }
-    // Find which paragraph contains this sentence
-    const paragraphs = getParagraphWorkspaces(content)
-    for (const p of paragraphs) {
-      if (p.sentences.some(s => s.id === sentence.id)) {
-        setActiveParagraphId(p.id)
-        return
-      }
-    }
-    setActiveParagraphId(null)
+
+    const workspace =
+      getParagraphWorkspaces(content)
+        .find(p =>
+          p.sentences.some(
+            s => s.id === sentence.id,
+          ),
+        )
+
+    setActiveParagraphId(
+      workspace?.id ?? null,
+    )
   }
 
 
@@ -296,43 +302,48 @@ export default function Dashboard() {
     }))
   }
   
-  function replaceCurrentSentence(newText: string) {
-    console.log('REPLACE CLICKED')
-    console.log('activeSentence', activeSentence)
-    console.log('content before', content)
-    if (!activeSentence || !activeParagraphId) return
+  function replaceCurrentSentence(
+    newText: string,
+  ) {
+    if (!activeSentence) {
+      return
+    }
 
-    const paragraphs = getParagraphWorkspaces(content)
+    const paragraphs =
+      getParagraphWorkspaces(content)
 
-    const targetParagraph = paragraphs.find(
-      p => p.id === activeParagraphId
-    )
-
-    if (!targetParagraph) return
-
-    const updatedSentences = targetParagraph.sentences.map(sentence =>
-        sentence.id === activeSentence.id
-          ? { ...sentence, text: newText }
-          : sentence
+    const workspace =
+      paragraphs.find(p =>
+        p.sentences.some(
+          s =>
+            s.id === activeSentence.id,
+        ),
       )
 
-      console.log('activeSentence.id', activeSentence.id)
-      console.log('activeParagraphId', activeParagraphId)
+    if (!workspace) {
+      return
+    }
 
-      targetParagraph.sentences.forEach(s => {
-        console.log('paragraph sentence', s.id, s.text)
-      })
+    const updatedSentences =
+      workspace.sentences.map(
+        sentence =>
+          sentence.id ===
+          activeSentence.id
+            ? {
+                ...sentence,
+                text: newText,
+              }
+            : sentence,
+      )
 
-      console.log('updatedSentences', updatedSentences)
-
-    const newDoc = updateParagraphSentences(
-      content,
-      targetParagraph.headingId,
-      updatedSentences
-    )
+    const newDoc =
+      updateParagraphSentences(
+        content,
+        workspace.headingId,
+        updatedSentences,
+      )
 
     handleContentChange(newDoc)
-    console.log('newDoc', newDoc)
 
     setActiveSentence({
       ...activeSentence,
@@ -413,30 +424,52 @@ export default function Dashboard() {
     }
     const safeTitle = title.trim().replace(/[^\w-]+/g, '-').replace(/^-|-$/g, '') || 'flowdraft'
     if (format === 'docx') {
-      downloadBlob(`${safeTitle}.docx`, buildDocxBlob(title, content))
+          buildDocxBlob(title, content)
+        .then(blob => {
+          downloadBlob(
+            `${safeTitle}.docx`,
+            blob,
+          )
+        })
+
+      return
     }
     if (format === 'pdf') {
       const element = document.createElement('div')
+
       element.style.padding = '40px'
       element.style.fontFamily = 'sans-serif'
       element.style.color = '#1a1a1a'
       element.style.maxWidth = '800px'
       element.style.margin = '0 auto'
+
       element.innerHTML = `
-        <h1 style="font-size: 28px; margin-bottom: 24px;">${title}</h1>
-        ${docToPreviewBlocks(content).map((block: any) => {
-          if (block.type === 'heading')
-            return `<h${block.level + 1} style="margin-top: 24px; font-weight: bold; font-size: ${block.level === 1 ? '24px' : '20px'};">${block.text}</h${block.level + 1}>`
-          return `<p style="margin-bottom: 12px; font-size: 16px; line-height: 1.6;">${block.text}</p>`
-        }).join('')}
+        <h1 style="font-size:28px;margin-bottom:24px;">
+          ${title}
+        </h1>
+
+        ${docToHtml(content)}
       `
-      html2pdf().set({
-        margin: 10,
-        filename: `${safeTitle}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      }).from(element).save()
+
+      html2pdf()
+        .set({
+          margin: 10,
+          filename: `${safeTitle}.pdf`,
+          image: {
+            type: 'jpeg',
+            quality: 0.98,
+          },
+          html2canvas: {
+            scale: 2,
+          },
+          jsPDF: {
+            unit: 'mm',
+            format: 'a4',
+            orientation: 'portrait',
+          },
+        })
+        .from(element)
+        .save()
     }
   }
 
@@ -455,6 +488,8 @@ export default function Dashboard() {
           mode={mode}
           outlineItems={outlineItems}
           variations={variations}
+          sidebarWidth={sidebarWidth}
+          onSidebarWidthChange={setSidebarWidth}
           onAddOutline={addOutline}
           onCollapseChange={setSidebarCollapsed}
           onCreateDraft={createDraft}
