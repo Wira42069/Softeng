@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "vercel-build": "prisma generate && tsc",
     "build": "prisma generate && tsc",
     "postinstall": "prisma generate",
     "dev": "tsx watch src/index.ts",
