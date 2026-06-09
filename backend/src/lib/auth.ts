@@ -28,5 +28,6 @@ export const auth = betterAuth({
     'http://localhost:5176',
     'http://127.0.0.1:5176',
     'http://localhost:4173',
+    'https://flowdraft-gules.vercel.app',
   ],
 })
