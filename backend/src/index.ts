@@ -1,13 +1,13 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
-import helmet from 'helmet'
+import * as helmet from 'helmet'
 import morgan from 'morgan'
 import { Prisma } from '@prisma/client'
 import { toNodeHandler } from 'better-auth/node'
 import { auth } from './lib/auth.js'
 import { prisma } from './lib/prisma.js'
-import Groq from 'groq-sdk'
+import { Groq } from 'groq-sdk'
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -16,7 +16,7 @@ const groq = new Groq({
 })
 
 // Middleware
-app.use(helmet())
+app.use(helmet.default())
 const corsOptions = process.env.NODE_ENV === 'production'
   ? {
       origin: process.env.FRONTEND_URL || ['http://localhost:5173', 'http://127.0.0.1:5173'],
