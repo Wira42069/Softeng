@@ -82,12 +82,6 @@ function formatDeadline(deadline?: string | null) {
   return formatDate(deadline)
 }
 
-function formatWordCount(words: number) {
-  if (words === 0) return 'Empty'
-  if (words === 1) return '1 word'
-  return `${words.toLocaleString()} words`
-}
-
 function parseDeadline(deadline?: string | null) {
   if (!deadline) {
     return null

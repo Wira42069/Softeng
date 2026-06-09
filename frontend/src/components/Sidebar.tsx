@@ -326,7 +326,6 @@ function SortableOutlineItem({
 
 function EditingAssistant({
   activeSentence,
-  activeParagraphId,
   variations,
   onUseVariation,
   onVariationChange,

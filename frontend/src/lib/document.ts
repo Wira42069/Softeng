@@ -1,11 +1,3 @@
-import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  HeadingLevel,
-} from 'docx'
-
 import type {
   OutlineItem,
   ParagraphWorkspaceItem,
@@ -366,7 +358,7 @@ export function removeParagraphByHeading(doc: TipTapDoc, headingId: string): Tip
 
 export function updateParagraphSentences(
   doc: TipTapDoc,
-  headingId: string,
+  _headingId: string,
   newSentences: SentenceItem[],
 ): TipTapDoc {
   const nodes = [...doc.content]
@@ -504,79 +496,71 @@ export function docToPreviewBlocks(doc: TipTapDoc): PreviewBlock[] {
   })
 }
 
-function nodeToRuns(node: TipTapNode): TextRun[] {
-  if (node.type === 'text') {
-    return [
-      new TextRun({
-        text: node.text ?? '',
-        bold: node.marks?.some(
-          mark => mark.type === 'bold',
-        ),
-        italics: node.marks?.some(
-          mark => mark.type === 'italic',
-        ),
-      }),
-    ]
-  }
-
-  return (
-    node.content?.flatMap(nodeToRuns) ?? []
-  )
-}
-
 export async function buildDocxBlob(
   title: string,
   doc: TipTapDoc,
 ): Promise<Blob> {
-  const children: Paragraph[] = []
+  const docx = await import('docx')
 
+  const children: any[] = []
+
+  // Title
   children.push(
-    new Paragraph({
-      heading: HeadingLevel.TITLE,
-      children: [new TextRun(title)],
+    new docx.Paragraph({
+      heading: docx.HeadingLevel.TITLE,
+      children: [
+        new docx.TextRun({
+          text: title,
+        }),
+      ],
     }),
   )
 
+  // Helper (now uses lazy-loaded docx)
+  function nodeToRuns(node: TipTapNode): any[] {
+    if (node.type === 'text') {
+      return [
+        new docx.TextRun({
+          text: node.text ?? '',
+          bold: node.marks?.some(m => m.type === 'bold'),
+          italics: node.marks?.some(m => m.type === 'italic'),
+        }),
+      ]
+    }
+
+    return node.content?.flatMap(nodeToRuns) ?? []
+  }
+
+  // Body
   for (const node of doc.content) {
     if (node.type === 'heading') {
-      const level =
-        Number(node.attrs?.level ?? 1)
+      const level = Number(node.attrs?.level ?? 1)
 
-      const headingMap = {
-        1: HeadingLevel.HEADING_1,
-        2: HeadingLevel.HEADING_2,
-        3: HeadingLevel.HEADING_3,
+      const headingMap: Record<number, any> = {
+        1: docx.HeadingLevel.HEADING_1,
+        2: docx.HeadingLevel.HEADING_2,
+        3: docx.HeadingLevel.HEADING_3,
       }
 
       children.push(
-        new Paragraph({
-          heading:
-            headingMap[
-              level as keyof typeof headingMap
-            ] ?? HeadingLevel.HEADING_1,
-          children:
-            node.content?.flatMap(
-              nodeToRuns,
-            ) ?? [],
+        new docx.Paragraph({
+          heading: headingMap[level] ?? docx.HeadingLevel.HEADING_1,
+          children: node.content?.flatMap(nodeToRuns) ?? [],
         }),
       )
-
       continue
     }
 
     if (node.type === 'paragraph') {
       children.push(
-        new Paragraph({
-          children:
-            node.content?.flatMap(
-              nodeToRuns,
-            ) ?? [],
+        new docx.Paragraph({
+          children: node.content?.flatMap(nodeToRuns) ?? [],
         }),
       )
     }
   }
 
-  const document = new Document({
+  const document = new docx.Document({
     sections: [
       {
         children,
@@ -584,7 +568,7 @@ export async function buildDocxBlob(
     ],
   })
 
-  return await Packer.toBlob(document)
+  return await docx.Packer.toBlob(document)
 }
 
 /* ---------------------------- */

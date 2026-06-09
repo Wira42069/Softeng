@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { lazy } from 'react'
 import ReactDOM from 'react-dom/client'
 import {
   BrowserRouter,
@@ -9,10 +9,10 @@ import {
 
 import './index.css'
 import './projects.css'
-import Login from './pages/Login.tsx'
-import Dashboard from './pages/Dashboard.tsx'
-import ProjectsHome from './pages/ProjectsHome.tsx'
-import NewDraftWizard from './pages/NewDraft.tsx'
+const Login = lazy(() => import('./pages/Login'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const ProjectsHome = lazy(() => import('./pages/ProjectsHome'))
+const NewDraftWizard = lazy(() => import('./pages/NewDraft'))
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

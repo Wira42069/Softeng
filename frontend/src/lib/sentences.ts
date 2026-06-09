@@ -9,11 +9,6 @@ const ABBREVIATIONS = new Set([
   'op', 'cit', 'trans', 'vol', 'no', 'fig', 'p', 'pp', 'ch', 'sec'
 ])
 
-function isCapitalized(word: string): boolean {
-  return word.length > 0 && word[0] === word[0].toUpperCase() && word[0] !== word[0].toLowerCase()
-}
-
-
 export function splitToSentences(
   text: string,
   paragraphId: string,

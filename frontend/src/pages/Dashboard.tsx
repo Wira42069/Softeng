@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, Download, History, Menu } from 'lucide-react'
-import html2pdf from 'html2pdf.js'
+
 
 import EditorPanel from '../components/EditorPanel'
 import Sidebar from '../components/Sidebar'
@@ -10,7 +10,6 @@ import VersionsPanel from '../components/VersionsPanel'
 import { api } from '../lib/api'
 import {
   addOutlineHeading,
-  buildDocxBlob,
   countWords,
   docToText,
   deleteOutlineBlock,
@@ -416,62 +415,78 @@ export default function Dashboard() {
     await navigator.clipboard.writeText(`${title}\n\n${docToText(content)}`)
   }
 
-  function exportDraft(format: string) {
-    if (!draft) return
-    if (format === 'copy') {
-      void copyDraftToClipboard()
-      return
-    }
-    const safeTitle = title.trim().replace(/[^\w-]+/g, '-').replace(/^-|-$/g, '') || 'flowdraft'
-    if (format === 'docx') {
-          buildDocxBlob(title, content)
-        .then(blob => {
-          downloadBlob(
-            `${safeTitle}.docx`,
-            blob,
-          )
-        })
+  async function exportDraft(format: string) {
+  if (!draft) return
 
-      return
-    }
-    if (format === 'pdf') {
-      const element = document.createElement('div')
-
-      element.style.padding = '40px'
-      element.style.fontFamily = 'sans-serif'
-      element.style.color = '#1a1a1a'
-      element.style.maxWidth = '800px'
-      element.style.margin = '0 auto'
-
-      element.innerHTML = `
-        <h1 style="font-size:28px;margin-bottom:24px;">
-          ${title}
-        </h1>
-
-        ${docToHtml(content)}
-      `
-
-      html2pdf()
-        .set({
-          margin: 10,
-          filename: `${safeTitle}.pdf`,
-          image: {
-            type: 'jpeg',
-            quality: 0.98,
-          },
-          html2canvas: {
-            scale: 2,
-          },
-          jsPDF: {
-            unit: 'mm',
-            format: 'a4',
-            orientation: 'portrait',
-          },
-        })
-        .from(element)
-        .save()
-    }
+  if (format === 'copy') {
+    void copyDraftToClipboard()
+    return
   }
+
+  const safeTitle =
+    title
+      .trim()
+      .replace(/[^\w-]+/g, '-')
+      .replace(/^-|-$/g, '') || 'flowdraft'
+
+  // =========================
+  // DOCX (lazy loaded)
+  // =========================
+  if (format === 'docx') {
+    const { buildDocxBlob } = await import('../lib/document')
+
+    const blob = await buildDocxBlob(title, content)
+
+    downloadBlob(`${safeTitle}.docx`, blob)
+    return
+  }
+
+  // =========================
+  // PDF (lazy loaded)
+  // =========================
+  if (format === 'pdf') {
+    const html2pdfModule = await import('html2pdf.js')
+    const html2pdf = html2pdfModule.default
+
+    const element = document.createElement('div')
+
+    element.style.padding = '40px'
+    element.style.fontFamily = 'sans-serif'
+    element.style.color = '#1a1a1a'
+    element.style.maxWidth = '800px'
+    element.style.margin = '0 auto'
+
+    element.innerHTML = `
+      <h1 style="font-size:28px;margin-bottom:24px;">
+        ${title}
+      </h1>
+
+      ${docToHtml(content)}
+    `
+
+    html2pdf()
+      .set({
+        margin: 10,
+        filename: `${safeTitle}.pdf`,
+        image: {
+          type: 'jpeg',
+          quality: 0.98,
+        },
+        html2canvas: {
+          scale: 2,
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait',
+        },
+      })
+      .from(element)
+      .save()
+
+    return
+  }
+}
 
   function closeOnboarding() {
     localStorage.setItem('flowdraft-onboarded', 'true')
