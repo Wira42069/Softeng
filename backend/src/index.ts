@@ -5,8 +5,8 @@ import helmet from 'helmet'
 import morgan from 'morgan'
 import { Prisma } from '@prisma/client'
 import { toNodeHandler } from 'better-auth/node'
-import { auth } from './lib/auth.ts'
-import { prisma } from './lib/prisma.ts'
+import { auth } from './lib/auth.js'
+import { prisma } from './lib/prisma.js'
 import Groq from 'groq-sdk'
 
 const app = express()
