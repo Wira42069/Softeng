@@ -422,7 +422,9 @@ app.post('/api/rewrite', async (req, res) => {
 
 // ── Start server ───────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`)
-  console.log(`Health check: http://localhost:${PORT}/api/health`)
-})
+// app.listen(PORT, () => {
+//   console.log(`Server running on http://localhost:${PORT}`)
+//   console.log(`Health check: http://localhost:${PORT}/api/health`)
+// })
+
+export default app
