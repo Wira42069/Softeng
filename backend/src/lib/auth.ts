@@ -31,4 +31,14 @@ export const auth = betterAuth({
     'https://flowdraftfrontend.vercel.app',
     'https://flowdraftfrontend-wira-s-projects2.vercel.app',
   ],
+
+   advanced: {
+    crossSubdomainCookies: {
+      enabled: false, // different domains, not subdomains
+    },
+    defaultCookieAttributes: {
+      sameSite: 'none',
+      secure: true,
+    },
+  },
 })
