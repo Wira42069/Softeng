@@ -30,6 +30,7 @@ export const auth = betterAuth({
     'http://localhost:4173',
     'https://flowdraftfrontend.vercel.app',
     'https://flowdraftfrontend-wira-s-projects2.vercel.app',
+    'https://vcfd-frontend.vercel.app',
   ],
 
    advanced: {
