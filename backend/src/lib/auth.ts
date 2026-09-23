@@ -2,6 +2,26 @@ import { betterAuth } from 'better-auth'
 import { prisma } from './prisma.js'
 import { prismaAdapter } from '@better-auth/prisma-adapter'
 
+const trustedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5174',
+  'http://localhost:5175',
+  'http://127.0.0.1:5175',
+  'http://localhost:5176',
+  'http://127.0.0.1:5176',
+  'http://localhost:4173',
+  'https://flowdraftfrontend.vercel.app',
+  'https://flowdraftfrontend-wira-s-projects2.vercel.app',
+  'https://vcfd-frontend.vercel.app',
+  process.env.FRONTEND_URL!,
+]
+
+console.log('BETTER_AUTH_URL:', process.env.BETTER_AUTH_URL)
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL)
+console.log('trustedOrigins:', trustedOrigins)
+
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
   secret: process.env.BETTER_AUTH_SECRET || 'flowdraft-local-dev-secret',
@@ -9,6 +29,7 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: 'postgresql',
   }),
+
   emailAndPassword: {
     enabled: true,
   },
@@ -18,27 +39,11 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24,
   },
 
-  trustedOrigins: [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://localhost:5174',
-    'http://127.0.0.1:5174',
-    'http://localhost:5175',
-    'http://127.0.0.1:5175',
-    'http://localhost:5176',
-    'http://127.0.0.1:5176',
-    'http://localhost:4173',
-    'https://flowdraftfrontend.vercel.app',
-    'https://flowdraftfrontend-wira-s-projects2.vercel.app',
-    'https://vcfd-frontend.vercel.app',
-    process.env.FRONTEND_URL!,
-  ],
+  trustedOrigins,
 
-  console.log(trustedOrigins) // Just to confirm production
-
-   advanced: {
+  advanced: {
     crossSubdomainCookies: {
-      enabled: false, // different domains, not subdomains
+      enabled: false,
     },
     defaultCookieAttributes: {
       sameSite: 'none',
