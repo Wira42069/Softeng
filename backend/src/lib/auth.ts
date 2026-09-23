@@ -31,6 +31,7 @@ export const auth = betterAuth({
     'https://flowdraftfrontend.vercel.app',
     'https://flowdraftfrontend-wira-s-projects2.vercel.app',
     'https://vcfd-frontend.vercel.app',
+    process.env.FRONTEND_URL!,
   ],
 
    advanced: {
