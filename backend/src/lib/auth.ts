@@ -34,6 +34,8 @@ export const auth = betterAuth({
     process.env.FRONTEND_URL!,
   ],
 
+  console.log(trustedOrigins) // Just to confirm production
+
    advanced: {
     crossSubdomainCookies: {
       enabled: false, // different domains, not subdomains
