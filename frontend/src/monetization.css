@@ -1,0 +1,257 @@
+/* Styles for plans, upgrade prompts, ads, citations, feedback, pricing, landing and admin.
+   All classes are prefixed `mz-` so they never collide with index.css / projects.css. */
+
+:root {
+  --mz-accent: #067044;
+  --mz-accent-dark: #04532f;
+  --mz-ink: #1f2421;
+  --mz-muted: #5d655f;
+  --mz-line: #dde3df;
+  --mz-soft: #f3f7f4;
+  --mz-danger: #b3261e;
+}
+
+.mz-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.mz-error { color: var(--mz-danger); font-size: 0.875rem; margin: 0.5rem 0 0; }
+.mz-muted { color: var(--mz-muted); font-size: 0.875rem; line-height: 1.5; }
+
+/* ---- buttons ---- */
+.mz-primary,
+.mz-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 40px;
+  padding: 0 1rem;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+.mz-primary { background: var(--mz-accent); color: #fff; border: 1px solid var(--mz-accent); }
+.mz-primary:hover:not(:disabled) { background: var(--mz-accent-dark); }
+.mz-secondary { background: #fff; color: var(--mz-ink); border: 1px solid var(--mz-line); }
+.mz-secondary:hover:not(:disabled) { background: var(--mz-soft); }
+.mz-primary:disabled,
+.mz-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+.mz-wide { width: 100%; }
+.mz-link { display: block; text-align: center; margin-top: 0.75rem; color: var(--mz-accent); font-size: 0.875rem; }
+
+/* ---- modals ---- */
+.mz-upgrade,
+.mz-feedback { position: relative; max-width: 440px; }
+.mz-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.mz-close:hover { background: var(--mz-soft); }
+.mz-upgrade-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 0.75rem;
+  border-radius: 12px;
+  background: var(--mz-soft);
+  color: var(--mz-accent);
+}
+.mz-benefits { margin: 0.75rem 0 0; padding-left: 1.1rem; color: var(--mz-ink); line-height: 1.7; }
+.mz-feedback textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem;
+  border: 1px solid var(--mz-line);
+  border-radius: 8px;
+  font: inherit;
+  resize: vertical;
+}
+
+/* ---- ad slot ---- */
+.mz-ad {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  border: 1px dashed var(--mz-line);
+  border-radius: 10px;
+  background: var(--mz-soft);
+  color: var(--mz-ink);
+  font-size: 0.875rem;
+}
+.mz-ad-banner { margin: 1rem auto; max-width: 960px; }
+.mz-ad-compact { margin: 0.5rem 0; }
+.mz-ad-label {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--mz-line);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--mz-muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.mz-ad-copy { flex: 1; min-width: 0; }
+.mz-ad-cta {
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: var(--mz-accent);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* ---- plan chip / usage ---- */
+.mz-plan {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--mz-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--mz-ink);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+.mz-plan-pro { background: var(--mz-soft); border-color: var(--mz-accent); color: var(--mz-accent-dark); font-weight: 600; }
+.mz-plan button,
+.mz-plan a { border: 0; background: none; padding: 0; color: var(--mz-accent); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
+.mz-banner {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--mz-accent);
+  border-radius: 10px;
+  background: var(--mz-soft);
+  color: var(--mz-ink);
+  font-size: 0.9rem;
+}
+
+/* ---- sources drawer ---- */
+.mz-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 100vw);
+  background: #fff;
+  border-left: 1px solid var(--mz-line);
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.08);
+}
+.mz-drawer-header { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1rem; border-bottom: 1px solid var(--mz-line); }
+.mz-drawer-header h2 { display: flex; align-items: center; gap: 0.4rem; flex: 1; margin: 0; font-size: 1rem; }
+.mz-drawer-body { display: flex; flex-direction: column; gap: 0.9rem; padding: 1rem; overflow-y: auto; }
+.mz-status { font-size: 0.75rem; color: var(--mz-muted); }
+.mz-status-error { color: var(--mz-danger); }
+.mz-row { display: flex; align-items: flex-end; gap: 0.5rem; }
+.mz-row > input,
+.mz-row > select { flex: 1; min-width: 0; }
+.mz-grow { flex: 1; min-width: 0; }
+.mz-grow-2 { flex: 2; min-width: 0; }
+.mz-lookup,
+.mz-form { display: flex; flex-direction: column; gap: 0.4rem; }
+.mz-lookup label,
+.mz-form label,
+.mz-row > label { font-size: 0.8125rem; font-weight: 600; color: var(--mz-muted); }
+.mz-drawer input,
+.mz-drawer select,
+.mz-drawer textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 38px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--mz-line);
+  border-radius: 8px;
+  font: inherit;
+}
+.mz-form { padding: 0.9rem; border: 1px solid var(--mz-line); border-radius: 10px; background: var(--mz-soft); }
+.mz-source-list { display: flex; flex-direction: column; gap: 0.6rem; margin: 0; padding: 0; list-style: none; }
+.mz-source { padding: 0.75rem; border: 1px solid var(--mz-line); border-radius: 10px; }
+.mz-source-text { margin: 0 0 0.6rem; font-size: 0.875rem; line-height: 1.5; overflow-wrap: anywhere; }
+.mz-source-actions { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.mz-source-actions .mz-secondary { min-height: 34px; font-size: 0.8125rem; }
+
+/* ---- shared page shell: landing, pricing, admin ---- */
+.mz-page { min-height: 100vh; background: #fff; color: var(--mz-ink); font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+.mz-nav { display: flex; align-items: center; justify-content: space-between; gap: 1rem; max-width: 1080px; margin: 0 auto; padding: 1rem 1.25rem; }
+.mz-brand { color: var(--mz-accent); font-size: 1.25rem; font-weight: 800; text-decoration: none; }
+.mz-nav-links { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.mz-nav-links a:not(.mz-primary):not(.mz-secondary) { color: var(--mz-ink); text-decoration: none; font-weight: 500; }
+.mz-section { max-width: 1080px; margin: 0 auto; padding: 3rem 1.25rem; }
+.mz-hero { text-align: center; padding-top: 4rem; }
+.mz-hero h1 { margin: 0 auto 1rem; max-width: 16ch; font-size: clamp(2rem, 6vw, 3.5rem); line-height: 1.08; }
+.mz-hero p { margin: 0 auto 1.75rem; max-width: 52ch; color: var(--mz-muted); font-size: 1.125rem; line-height: 1.6; }
+.mz-hero-actions { display: flex; justify-content: center; gap: 0.75rem; flex-wrap: wrap; }
+.mz-h2 { margin: 0 0 0.5rem; font-size: 1.75rem; text-align: center; }
+.mz-sub { margin: 0 auto 2rem; max-width: 56ch; color: var(--mz-muted); text-align: center; line-height: 1.6; }
+.mz-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+.mz-card { padding: 1.25rem; border: 1px solid var(--mz-line); border-radius: 14px; background: #fff; }
+.mz-card h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
+.mz-card p { margin: 0; color: var(--mz-muted); line-height: 1.55; font-size: 0.95rem; }
+.mz-steps { counter-reset: step; }
+.mz-steps .mz-card { position: relative; padding-top: 2.5rem; }
+.mz-steps .mz-card::before {
+  counter-increment: step;
+  content: counter(step);
+  position: absolute;
+  top: 0.9rem;
+  left: 1.25rem;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--mz-accent);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.mz-footer { border-top: 1px solid var(--mz-line); padding: 1.5rem 1.25rem; text-align: center; color: var(--mz-muted); font-size: 0.875rem; }
+
+/* ---- pricing ---- */
+.mz-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; max-width: 760px; margin: 0 auto; }
+.mz-plan-card { display: flex; flex-direction: column; gap: 0.75rem; padding: 1.5rem; border: 1px solid var(--mz-line); border-radius: 16px; background: #fff; }
+.mz-plan-card-pro { border: 2px solid var(--mz-accent); }
+.mz-plan-card h3 { margin: 0; font-size: 1.25rem; }
+.mz-price { margin: 0; font-size: 1.75rem; font-weight: 800; }
+.mz-price small { font-size: 0.9rem; font-weight: 500; color: var(--mz-muted); }
+.mz-plan-card ul { flex: 1; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+.mz-plan-card li { padding-left: 1.4rem; position: relative; line-height: 1.45; }
+.mz-plan-card li::before { content: '\2713'; position: absolute; left: 0; color: var(--mz-accent); font-weight: 700; }
+.mz-plan-card li.mz-no { color: var(--mz-muted); }
+.mz-plan-card li.mz-no::before { content: '\2013'; color: var(--mz-muted); }
+
+/* ---- admin ---- */
+.mz-admin { max-width: 860px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+.mz-admin h1 { margin: 0 0 1rem; font-size: 1.5rem; }
+.mz-feedback-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 0; padding: 0; list-style: none; }
+.mz-feedback-item { padding: 1rem; border: 1px solid var(--mz-line); border-radius: 12px; }
+.mz-feedback-meta { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.4rem; color: var(--mz-muted); font-size: 0.8125rem; }
+.mz-feedback-text { margin: 0 0 0.6rem; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+
+@media (max-width: 640px) {
+  .mz-ad { flex-wrap: wrap; }
+  .mz-hero { padding-top: 2.5rem; }
+}

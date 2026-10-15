@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ChevronDown, ChevronLeft, FilePlus2, GripVertical, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronLeft, FilePlus2, GripVertical, Lock, Plus, Sparkles, Trash2 } from 'lucide-react'
 import type { EditorMode, OutlineItem, SentenceItem } from '../types'
 
 interface SidebarProps {
@@ -12,6 +12,7 @@ interface SidebarProps {
   mode: EditorMode
   outlineItems: OutlineItem[]
   variations: string[]
+  aiLocked: boolean // true on the Free plan: the AI button asks the user to upgrade
   sidebarWidth: number
   onSidebarWidthChange: (width: number) => void
   onAddOutline: (level: number, afterBlockIndex?: number) => void
@@ -34,6 +35,7 @@ export default function Sidebar({
   mode,
   outlineItems,
   variations,
+  aiLocked,
   sidebarWidth,
   onSidebarWidthChange,
   onAddOutline,
@@ -130,6 +132,7 @@ export default function Sidebar({
             activeSentence={activeSentence}
             activeParagraphId={activeParagraphId}
             variations={variations}
+            aiLocked={aiLocked}
             onUseVariation={onUseVariation}
             onVariationChange={onVariationChange}
             onAddVariation={onAddVariation}
@@ -327,6 +330,7 @@ function SortableOutlineItem({
 function EditingAssistant({
   activeSentence,
   variations,
+  aiLocked,
   onUseVariation,
   onVariationChange,
   onAddVariation,
@@ -336,6 +340,7 @@ function EditingAssistant({
   activeSentence: SentenceItem | null
   activeParagraphId: string | null
   variations: string[]
+  aiLocked: boolean
   onUseVariation: (newText: string) => void
   onVariationChange: (index: number, text: string) => void
   onAddVariation: () => void
@@ -356,9 +361,16 @@ function EditingAssistant({
         Add Variation
       </button>
 
-      <button className="primary-action" type="button" disabled={!activeSentence} onClick={onGenerateSingleVariation}>
-        <Sparkles size={16} />
-        Generate AI Variations 
+      {/* On the Free plan the button stays clickable (even with no sentence selected) so it can show the upgrade prompt. */}
+      <button
+        className="primary-action"
+        type="button"
+        disabled={!aiLocked && !activeSentence}
+        title={aiLocked ? 'AI variations are part of the Pro plan' : undefined}
+        onClick={onGenerateSingleVariation}
+      >
+        {aiLocked ? <Lock size={16} /> : <Sparkles size={16} />}
+        {aiLocked ? 'AI Variations (Pro)' : 'Generate AI Variations'}
       </button>
 
       <div className="variation-list">

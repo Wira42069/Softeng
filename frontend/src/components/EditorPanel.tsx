@@ -24,6 +24,7 @@ import {
   removeParagraphByHeading
 } from '../lib/document'
 import type { EditorMode, SentenceItem, TipTapDoc } from '../types'
+import { referencesHtml, type CitationStyle, type Source } from '../lib/citations'
 import RichTextEditorPanel from './RichTextEditorPanel'
 
 interface EditorPanelProps {
@@ -31,6 +32,8 @@ interface EditorPanelProps {
   content: TipTapDoc
   focusMode: boolean
   mode: EditorMode
+  sources: Source[]
+  citationStyle: CitationStyle
   onContentChange: (content: TipTapDoc) => void
   onSentenceSelect: (sentence: SentenceItem | null) => void
   onFocusModeToggle: () => void
@@ -42,6 +45,8 @@ export default function EditorPanel(props: EditorPanelProps) {
     content,
     focusMode,
     mode,
+    sources,
+    citationStyle,
     onContentChange,
     onSentenceSelect,
     onFocusModeToggle,
@@ -59,7 +64,7 @@ export default function EditorPanel(props: EditorPanelProps) {
   }
 
   if (mode === 'preview') {
-    return <PreviewPane content={content} />
+    return <PreviewPane content={content} sources={sources} citationStyle={citationStyle} />
   }
 
   return (
@@ -375,14 +380,18 @@ function SortableSentence({
 
 function PreviewPane({
   content,
+  sources,
+  citationStyle,
 }: {
   content: TipTapDoc
+  sources: Source[]
+  citationStyle: CitationStyle
 }) {
   return (
     <section className="workspace-panel preview-pane">
       <div
         dangerouslySetInnerHTML={{
-          __html: docToHtml(content),
+          __html: docToHtml(content) + referencesHtml(sources, citationStyle),
         }}
       />
     </section>

@@ -7,6 +7,7 @@ import type {
   TipTapNode,
 } from '../types'
 
+import { api } from './api'
 import { splitToSentences } from './sentences'
 
 export const emptyDoc: TipTapDoc = {
@@ -123,22 +124,13 @@ export function sentencesToDoc(sentences: SentenceItem[]): TipTapDoc {
   return { type: 'doc', content: paragraphs }
 }
 
+// Pro-only. Goes through the shared axios client so it uses the configured API base URL and
+// sends the login cookie. Throws an axios error on 401/403/429; see errorCode() in lib/me.ts.
 export async function makeSentenceVariations(
   sentence: string,
 ): Promise<string> {
-  const response = await fetch('http://localhost:3000/api/rewrite', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      sentence,
-    }),
-  })
-
-  const data = await response.json()
-
-  return data.variation
+  const res = await api.post<{ variation: string }>('/api/rewrite', { sentence })
+  return res.data.variation
 }
 
 /* ---------------------------- */
@@ -496,9 +488,11 @@ export function docToPreviewBlocks(doc: TipTapDoc): PreviewBlock[] {
   })
 }
 
+// `references` is the formatted bibliography (see referenceEntries in lib/citations.ts).
 export async function buildDocxBlob(
   title: string,
   doc: TipTapDoc,
+  references?: { heading: string; entries: string[] },
 ): Promise<Blob> {
   const docx = await import('docx')
 
@@ -555,6 +549,24 @@ export async function buildDocxBlob(
       children.push(
         new docx.Paragraph({
           children: node.content?.flatMap(nodeToRuns) ?? [],
+        }),
+      )
+    }
+  }
+
+  // Bibliography. Hanging indent matches APA/MLA reference-list layout.
+  if (references && references.entries.length > 0) {
+    children.push(
+      new docx.Paragraph({
+        heading: docx.HeadingLevel.HEADING_2,
+        children: [new docx.TextRun({ text: references.heading })],
+      }),
+    )
+    for (const entry of references.entries) {
+      children.push(
+        new docx.Paragraph({
+          indent: { left: 720, hanging: 720 },
+          children: [new docx.TextRun({ text: entry })],
         }),
       )
     }

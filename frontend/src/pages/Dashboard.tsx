@@ -1,13 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ChevronDown, Download, History, Menu } from 'lucide-react'
+import { ArrowLeft, BookMarked, ChevronDown, Download, History, Menu, MessageSquare } from 'lucide-react'
 
 
+import AdSlot from '../components/AdSlot'
 import EditorPanel from '../components/EditorPanel'
+import FeedbackDialog from '../components/FeedbackDialog'
 import Sidebar from '../components/Sidebar'
+import SourcesPanel from '../components/SourcesPanel'
+import UpgradePrompt from '../components/UpgradePrompt'
 import VersionsPanel from '../components/VersionsPanel'
 
 import { api } from '../lib/api'
+import { errorCode, errorMessage, useMe } from '../lib/me'
+import {
+  escapeHtml,
+  loadCitationStyle,
+  referenceEntries,
+  referenceListTitle,
+  referencesHtml,
+  saveCitationStyle,
+  type CitationStyle,
+  type Source,
+} from '../lib/citations'
 import {
   addOutlineHeading,
   countWords,
@@ -66,6 +81,18 @@ export default function Dashboard() {
     Record<string, string[]>
   >({})
 
+  // Plan, upgrade prompts, feedback and citations
+  const { me } = useMe()
+  const aiLocked = me !== null && me.plan !== 'pro'
+  const [upgradeReason, setUpgradeReason] = useState<string | null>(null)
+  const [showFeedback, setShowFeedback] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [sources, setSources] = useState<Source[]>([])
+  const [citationStyle, setCitationStyle] = useState<CitationStyle>(loadCitationStyle)
+  const [showSources, setShowSources] = useState(false)
+  const [sourcesStatus, setSourcesStatus] = useState<'saved' | 'saving' | 'error'>('saved')
+  const sourcesDirtyRef = useRef(false)
+
   const selectedDraftId = draft?.id ?? null
   const contentKey = serializeDoc(content)
   const contentDirty = Boolean(selectedDraftId) && contentKey !== savedContentKey
@@ -102,9 +129,27 @@ export default function Dashboard() {
       setUpdatedAt(null)
       setActiveSentence(null)
       setActiveParagraphId(null)
+      setSources([])
+      sourcesDirtyRef.current = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId])
+
+  // Autosave the source list shortly after it changes. It has its own endpoint, so it
+  // never affects the content autosave or its conflict detection.
+  useEffect(() => {
+    if (!selectedDraftId || !sourcesDirtyRef.current) return
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        await api.put(`/api/drafts/${selectedDraftId}/sources`, { sources })
+        sourcesDirtyRef.current = false
+        setSourcesStatus('saved')
+      } catch {
+        setSourcesStatus('error')
+      }
+    }, 800)
+    return () => window.clearTimeout(timeoutId)
+  }, [sources, selectedDraftId])
 
   useEffect(() => {
     if (!selectedDraftId || !contentDirty || saveStatus === 'saving' || saveStatus === 'conflict') return
@@ -156,6 +201,24 @@ export default function Dashboard() {
     setUpdatedAt(res.data.updatedAt)
     setSentenceVariations({})
     setShowVersions(false)
+    setSources(res.data.sources ?? [])
+    sourcesDirtyRef.current = false
+    setSourcesStatus('saved')
+  }
+
+  function handleSourcesChange(next: Source[]) {
+    sourcesDirtyRef.current = true
+    setSourcesStatus('saving')
+    setSources(next)
+  }
+
+  function handleCitationStyleChange(style: CitationStyle) {
+    setCitationStyle(style)
+    saveCitationStyle(style)
+  }
+
+  function insertCitation(text: string) {
+    window.dispatchEvent(new CustomEvent('flowdraft:insert-text', { detail: text }))
   }
 
   async function saveContent(nextContent: TipTapDoc, overwriteConflict: boolean) {
@@ -258,8 +321,14 @@ export default function Dashboard() {
   }
 
   async function generateSingleVariation() {
+    // Free plan: show the upgrade prompt instead of calling the (Pro-only) API.
+    if (aiLocked) {
+      setUpgradeReason('AI sentence variations are part of the Pro plan.')
+      return
+    }
     if (!activeSentence) return
 
+    setNotice('')
     try {
       const variation = await makeSentenceVariations(
         activeSentence.text
@@ -274,6 +343,11 @@ export default function Dashboard() {
       }))
     } catch (error) {
       console.error('Failed to generate variation', error)
+      if (errorCode(error) === 'PRO_REQUIRED') {
+        setUpgradeReason('AI sentence variations are part of the Pro plan.')
+      } else {
+        setNotice(errorMessage(error, 'Could not generate a variation. Please try again.'))
+      }
     }
   }
 
@@ -435,7 +509,10 @@ export default function Dashboard() {
   if (format === 'docx') {
     const { buildDocxBlob } = await import('../lib/document')
 
-    const blob = await buildDocxBlob(title, content)
+    const blob = await buildDocxBlob(title, content, {
+      heading: referenceListTitle(citationStyle),
+      entries: referenceEntries(sources, citationStyle),
+    })
 
     downloadBlob(`${safeTitle}.docx`, blob)
     return
@@ -458,10 +535,11 @@ export default function Dashboard() {
 
     element.innerHTML = `
       <h1 style="font-size:28px;margin-bottom:24px;">
-        ${title}
+        ${escapeHtml(title)}
       </h1>
 
       ${docToHtml(content)}
+      ${referencesHtml(sources, citationStyle)}
     `
 
     html2pdf()
@@ -503,6 +581,7 @@ export default function Dashboard() {
           mode={mode}
           outlineItems={outlineItems}
           variations={variations}
+          aiLocked={aiLocked}
           sidebarWidth={sidebarWidth}
           onSidebarWidthChange={setSidebarWidth}
           onAddOutline={addOutline}
@@ -565,13 +644,54 @@ export default function Dashboard() {
               </span>
             )}
 
+            {me && (
+              <span className={`mz-plan ${me.plan === 'pro' ? 'mz-plan-pro' : ''}`}>
+                {me.plan === 'pro' ? 'Pro' : 'Free'}
+                {me.plan !== 'pro' && (
+                  <button
+                    type="button"
+                    onClick={() => setUpgradeReason('Upgrade for AI sentence variations, unlimited drafts and no ads.')}
+                  >
+                    Upgrade
+                  </button>
+                )}
+              </span>
+            )}
+
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Sources and citations"
+              title="Sources and citations"
+              disabled={!draft}
+              onClick={() => {
+                setShowSources(!showSources)
+                setShowVersions(false)
+              }}
+            >
+              <BookMarked size={17} />
+            </button>
+
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Send feedback"
+              title="Send feedback"
+              onClick={() => setShowFeedback(true)}
+            >
+              <MessageSquare size={17} />
+            </button>
+
             <button
               className="icon-button"
               type="button"
               aria-label="Version history"
               title="Version History"
               disabled={!draft}
-              onClick={() => setShowVersions(!showVersions)}
+              onClick={() => {
+                setShowVersions(!showVersions)
+                setShowSources(false)
+              }}
             >
               <History size={17} />
             </button>
@@ -663,12 +783,21 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {notice && (
+          <div className="mz-banner" role="status">
+            {notice}{' '}
+            <button type="button" onClick={() => setNotice('')}>Dismiss</button>
+          </div>
+        )}
+
         {selectedDraftId ? (
           <EditorPanel
             activeSentenceId={activeSentence?.id ?? null}
             content={content}
             focusMode={focusMode}
             mode={mode}
+            sources={sources}
+            citationStyle={citationStyle}
             onContentChange={handleContentChange}
             onSentenceSelect={handleSentenceSelect}
             onFocusModeToggle={() => setFocusMode((f) => !f)}
@@ -684,7 +813,28 @@ export default function Dashboard() {
           <span>{wordCount} words</span>
           <span>{characterCount} characters</span>
         </div>
+
+        <AdSlot plan={me?.plan} variant="compact" />
       </main>
+
+      {upgradeReason && (
+        <UpgradePrompt message={upgradeReason} onClose={() => setUpgradeReason(null)} />
+      )}
+
+      {showFeedback && <FeedbackDialog onClose={() => setShowFeedback(false)} />}
+
+      {showSources && draft && (
+        <SourcesPanel
+          sources={sources}
+          style={citationStyle}
+          canInsert={mode === 'production'}
+          saveStatus={sourcesStatus}
+          onChange={handleSourcesChange}
+          onStyleChange={handleCitationStyleChange}
+          onInsert={insertCitation}
+          onClose={() => setShowSources(false)}
+        />
+      )}
 
       {pendingAction && (
         <div className="modal-backdrop" role="presentation">

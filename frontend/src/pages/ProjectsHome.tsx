@@ -10,8 +10,13 @@ import {
   LogOut,
   ChevronRight,
   Trash2,
+  MessageSquare,
 } from 'lucide-react'
+import AdSlot from '../components/AdSlot'
+import FeedbackDialog from '../components/FeedbackDialog'
+import UpgradePrompt from '../components/UpgradePrompt'
 import { api } from '../lib/api'
+import { errorCode } from '../lib/me'
 import type { DraftSummary } from '../types'
 
 interface UserInfo {
@@ -20,6 +25,9 @@ interface UserInfo {
   nickname?: string | null
   email: string
   image: string | null
+  plan?: 'free' | 'pro'
+  role?: 'user' | 'admin'
+  draftLimit?: number | null // null = unlimited
 }
 
 const TOPIC_ACCENT_COLORS: Record<string, string> = {
@@ -144,6 +152,14 @@ export default function ProjectsHome() {
   )
   const displayName = user?.nickname?.trim() || user?.name?.trim() || 'there'
 
+  // Plan limits (free plan: 5 drafts). The server enforces this; the UI just explains it.
+  const [upgradeReason, setUpgradeReason] = useState<string | null>(null)
+  const [showFeedback, setShowFeedback] = useState(false)
+  const [upgradedNote, setUpgradedNote] = useState('')
+  const draftLimit = user?.draftLimit ?? null
+  const atLimit = draftLimit !== null && drafts.length >= draftLimit
+  const limitMessage = `You have used all ${draftLimit ?? ''} drafts on the free plan. Upgrade to Pro for unlimited drafts.`
+
   useEffect(() => {
     async function init() {
       try {
@@ -154,6 +170,15 @@ export default function ProjectsHome() {
         setUser(userRes.data)
         setNicknameDraft(userRes.data.nickname || '')
         setDrafts(draftsRes.data)
+
+        // Returning from Stripe Checkout. The webhook can take a few seconds to flip the plan.
+        if (new URLSearchParams(window.location.search).get('upgraded') === '1') {
+          setUpgradedNote(
+            userRes.data.plan === 'pro'
+              ? 'Welcome to FlowDraft Pro! AI variations and unlimited drafts are unlocked.'
+              : 'Thanks for upgrading. Your plan is being activated; refresh this page in a few seconds.'
+          )
+        }
       } catch {
         navigate('/login')
       } finally {
@@ -164,10 +189,18 @@ export default function ProjectsHome() {
   }, [navigate])
 
   function handleCreateDraft() {
+    if (atLimit) {
+      setUpgradeReason(limitMessage)
+      return
+    }
     navigate('/new-draft')
   }
 
   async function handleCreateBlankDraft() {
+    if (atLimit) {
+      setUpgradeReason(limitMessage)
+      return
+    }
     try {
       const res = await api.post('/api/drafts', {
         title: 'Untitled Draft',
@@ -181,6 +214,10 @@ export default function ProjectsHome() {
 
       navigate(`/dashboard/${res.data.id}`)
     } catch (err) {
+      if (errorCode(err) === 'DRAFT_LIMIT') {
+        setUpgradeReason(limitMessage)
+        return
+      }
       console.error(err)
     }
   }
@@ -237,7 +274,8 @@ export default function ProjectsHome() {
       const res = await api.patch<UserInfo>('/api/me', {
         nickname: nicknameDraft,
       })
-      setUser(res.data)
+      // PATCH returns only profile fields, so merge to keep plan and limits.
+      setUser((current) => (current ? { ...current, ...res.data } : res.data))
       setNicknameDraft(res.data.nickname || '')
       setSettingsStatus('saved')
     } catch {
@@ -379,6 +417,36 @@ export default function ProjectsHome() {
                   : 'PROJECTS'}
           </h1>
           <div className="projects-topbar-actions">
+            {user?.plan && (
+              <span className={`mz-plan ${user.plan === 'pro' ? 'mz-plan-pro' : ''}`}>
+                {user.plan === 'pro'
+                  ? 'Pro'
+                  : `Free · ${drafts.length} of ${draftLimit ?? '∞'} drafts`}
+                {user.plan !== 'pro' && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setUpgradeReason('Upgrade for AI sentence variations, unlimited drafts and no ads.')
+                    }
+                  >
+                    Upgrade
+                  </button>
+                )}
+              </span>
+            )}
+
+            {user?.role === 'admin' && <a className="mz-plan" href="/admin">Admin</a>}
+
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Send feedback"
+              title="Send feedback"
+              onClick={() => setShowFeedback(true)}
+            >
+              <MessageSquare size={18} />
+            </button>
+
             <label className="projects-search">
               <input
                 type="text"
@@ -406,6 +474,12 @@ export default function ProjectsHome() {
 
         {/* ── Content Area ── */}
         <div className="projects-content">
+          {upgradedNote && (
+            <div className="mz-banner" role="status">
+              {upgradedNote}{' '}
+              <button type="button" onClick={() => setUpgradedNote('')}>Dismiss</button>
+            </div>
+          )}
           {sidebarActive === 'settings' || sidebarActive === 'profile' ? (
             <SettingsPanel
               displayName={displayName}
@@ -620,7 +694,15 @@ export default function ProjectsHome() {
             </>
           )}
         </div>
+
+        <AdSlot plan={user?.plan} />
       </main>
+
+      {upgradeReason && (
+        <UpgradePrompt message={upgradeReason} onClose={() => setUpgradeReason(null)} />
+      )}
+
+      {showFeedback && <FeedbackDialog onClose={() => setShowFeedback(false)} />}
     </div>
   )
 }

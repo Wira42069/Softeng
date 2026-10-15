@@ -7,13 +7,18 @@ import {
   Rocket,
   ChevronDown,
 } from 'lucide-react'
+import UpgradePrompt from '../components/UpgradePrompt'
 import { api } from '../lib/api'
+import { errorCode } from '../lib/me'
 
 interface UserInfo {
   id: string
   name: string
   email: string
   image: string | null
+  plan?: 'free' | 'pro'
+  draftCount?: number
+  draftLimit?: number | null // null = unlimited
 }
 
 interface RecommendCard {
@@ -418,6 +423,12 @@ export default function NewDraftWizard() {
   const [selectedRecommend, setSelectedRecommend] = useState<RecommendCard | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
   const [creating, setCreating] = useState<boolean>(false)
+  const [limitPrompt, setLimitPrompt] = useState<boolean>(false)
+
+  // Free plan: 5 drafts. The server enforces it (DRAFT_LIMIT); this just explains it early.
+  const draftLimit = user?.draftLimit ?? null
+  const atLimit = draftLimit !== null && (user?.draftCount ?? 0) >= draftLimit
+  const limitMessage = `You have used all ${draftLimit ?? ''} drafts on the free plan. Upgrade to Pro for unlimited drafts.`
 
   useEffect(() => {
     async function fetchUser() {
@@ -467,6 +478,10 @@ export default function NewDraftWizard() {
 
   const handleStartDraft = async () => {
     if (creating) return
+    if (atLimit) {
+      setLimitPrompt(true)
+      return
+    }
     setCreating(true)
 
     const topicName = getActiveTopicName()
@@ -487,6 +502,9 @@ export default function NewDraftWizard() {
       })
       navigate(`/dashboard/${res.data.id}`)
     } catch (err) {
+      if (errorCode(err) === 'DRAFT_LIMIT') {
+        setLimitPrompt(true)
+      }
       console.error('Failed to create custom draft:', err)
     } finally {
       setCreating(false)
@@ -559,6 +577,13 @@ export default function NewDraftWizard() {
                 <span className="wizard-welcome">Welcome!</span>
                 <h2 className="wizard-tagline">Ready to make another impactful writing?</h2>
               </div>
+
+              {atLimit && (
+                <div className="mz-banner" role="status">
+                  {limitMessage}{' '}
+                  <button type="button" onClick={() => setLimitPrompt(true)}>Upgrade</button>
+                </div>
+              )}
 
               {/* Topic Choice Pills */}
               <div className="wizard-pills-grid">
@@ -772,6 +797,10 @@ export default function NewDraftWizard() {
           )}
         </div>
       </main>
+
+      {limitPrompt && (
+        <UpgradePrompt message={limitMessage} onClose={() => setLimitPrompt(false)} />
+      )}
     </div>
   )
 }

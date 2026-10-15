@@ -46,6 +46,20 @@ export default function RichTextEditorPanel({
     }
   }, [content, editor])
 
+  // The Sources panel asks to insert an in-text citation at the cursor by dispatching
+  // a "flowdraft:insert-text" window event with the text as `detail`.
+  useEffect(() => {
+    if (!editor) return
+    function handleInsert(event: Event) {
+      const text = (event as CustomEvent<string>).detail
+      if (typeof text === 'string' && text) {
+        editor?.chain().focus().insertContent(text).run()
+      }
+    }
+    window.addEventListener('flowdraft:insert-text', handleInsert)
+    return () => window.removeEventListener('flowdraft:insert-text', handleInsert)
+  }, [editor])
+
   if (!editor) return null
 
   const casualFont = 'Comic Sans MS, Comic Sans'

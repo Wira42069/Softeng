@@ -1,3 +1,5 @@
+import type { Source } from './lib/citations'
+
 export type EditorMode = 'production' | 'editing' | 'preview'
 
 export type WorkflowStage =
@@ -51,6 +53,7 @@ export interface DraftSummary {
 
 export interface DraftDetail extends DraftSummary {
   content: TipTapDoc | null
+  sources?: Source[] | null
 }
 
 export interface VersionSummary {
