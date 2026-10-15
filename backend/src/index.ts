@@ -1,14 +1,24 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
 import morgan from 'morgan'
 import { Prisma } from '@prisma/client'
 import { toNodeHandler } from 'better-auth/node'
 import { auth } from './lib/auth.js'
 import { prisma } from './lib/prisma.js'
+import { getCurrentUser } from './lib/currentUser.js'
+import { requirePro } from './lib/guards.js'
+import { aiLimiter } from './lib/limiters.js'
+import { FREE_DRAFT_LIMIT } from './lib/plans.js'
+import { billingRouter, stripeWebhook } from './routes/billing.js'
+import { citationsRouter } from './routes/citations.js'
+import { supportRouter } from './routes/support.js'
 import { Groq } from 'groq-sdk'
 
 const app = express()
+// Behind Vercel's proxy: needed so rate limiting sees the real client IP.
+app.set('trust proxy', 1)
 const PORT = process.env.PORT || 3000
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -21,14 +31,23 @@ const corsOptions = process.env.NODE_ENV === 'production'
       credentials: true,
     }
   : { origin: true, credentials: true }
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
 app.use(cors(corsOptions))
 app.use(morgan('dev'))
 
 // Mount Better-Auth handler
 app.use('/api/auth', toNodeHandler(auth))
 
+// Stripe webhook needs the raw request body, so it must come BEFORE express.json().
+app.post('/api/billing/webhook', stripeWebhook)
+
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
+
+// Plans & billing, feedback/admin, and citations (see routes/).
+app.use('/api/billing', billingRouter)
+app.use('/api', supportRouter)
+app.use('/api', citationsRouter)
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -71,17 +90,22 @@ app.get('/api/health', (_req, res) => {
 
 app.get('/api/me', async (req, res) => {
   try {
-    const user = await getSessionUser(req)
+    const user = await getCurrentUser(req)
     if (!user) return res.status(401).json({ error: 'Unauthorized' })
 
-    const profile = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { id: true, name: true, nickname: true, email: true, image: true },
+    const draftCount = await prisma.draft.count({ where: { userId: user.id } })
+
+    res.json({
+      id: user.id,
+      name: user.name,
+      nickname: user.nickname,
+      email: user.email,
+      image: user.image,
+      plan: user.isPro ? 'pro' : 'free',
+      role: user.isAdmin ? 'admin' : 'user',
+      draftCount,
+      draftLimit: user.isPro ? null : FREE_DRAFT_LIMIT,
     })
-
-    if (!profile) return res.status(404).json({ error: 'User not found' })
-
-    res.json(profile)
   } catch (error) {
     handleError(res, error)
   }
@@ -167,8 +191,20 @@ app.get('/api/drafts', async (req, res) => {
 
 app.post('/api/drafts', async (req, res) => {
   try {
-    const user = await getSessionUser(req)
+    const user = await getCurrentUser(req)
     if (!user) return res.status(401).json({ error: 'Unauthorized' })
+
+    // Free plan: at most FREE_DRAFT_LIMIT drafts. Enforced here, not just in the UI.
+    if (!user.isPro) {
+      const draftCount = await prisma.draft.count({ where: { userId: user.id } })
+      if (draftCount >= FREE_DRAFT_LIMIT) {
+        return res.status(403).json({
+          error: `The free plan includes up to ${FREE_DRAFT_LIMIT} drafts. Upgrade to Pro for unlimited drafts.`,
+          code: 'DRAFT_LIMIT',
+          limit: FREE_DRAFT_LIMIT,
+        })
+      }
+    }
 
     const { title, content, topic, deadline } = req.body
     const draft = await prisma.draft.create({
@@ -380,13 +416,20 @@ app.patch('/api/drafts/:id', async (req, res) => {
   }
 })
 
-app.post('/api/rewrite', async (req, res) => {
+// AI sentence variations: Pro plan only, per-user rate limited.
+app.post('/api/rewrite', ...requirePro, aiLimiter, async (req, res) => {
   try {
-    const { sentence } = req.body
+    const sentence = typeof req.body?.sentence === 'string' ? req.body.sentence.trim() : ''
 
     if (!sentence) {
       return res.status(400).json({
         error: 'Sentence required',
+      })
+    }
+
+    if (sentence.length > 2000) {
+      return res.status(400).json({
+        error: 'Sentence is too long',
       })
     }
 
@@ -406,8 +449,6 @@ app.post('/api/rewrite', async (req, res) => {
       temperature: 0.9,
       max_completion_tokens: 500,
     })
-
-    console.log('GROQ RESPONSE:', JSON.stringify(completion, null, 2))
 
     const variation =
       completion.choices[0]?.message?.content?.trim() ?? sentence

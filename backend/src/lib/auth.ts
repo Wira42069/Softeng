@@ -15,8 +15,13 @@ const trustedOrigins = [
   'https://flowdraftfrontend.vercel.app',
   'https://flowdraftfrontend-wira-s-projects2.vercel.app',
   'https://vcfd-frontend.vercel.app',
-  process.env.FRONTEND_URL!,
-]
+  process.env.FRONTEND_URL,
+].filter((origin): origin is string => Boolean(origin))
+
+const authSecret = process.env.BETTER_AUTH_SECRET
+if (!authSecret && process.env.NODE_ENV === 'production') {
+  throw new Error('BETTER_AUTH_SECRET must be set in production')
+}
 
 console.log('BETTER_AUTH_URL:', process.env.BETTER_AUTH_URL)
 console.log('FRONTEND_URL:', process.env.FRONTEND_URL)
@@ -24,7 +29,7 @@ console.log('trustedOrigins:', trustedOrigins)
 
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
-  secret: process.env.BETTER_AUTH_SECRET || 'flowdraft-local-dev-secret',
+  secret: authSecret || 'flowdraft-local-dev-secret',
 
   database: prismaAdapter(prisma, {
     provider: 'postgresql',

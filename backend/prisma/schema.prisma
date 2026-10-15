@@ -18,9 +18,14 @@ model User {
   emailVerified Boolean   @default(false)
   image         String?
   nickname      String?
+  plan                 String     @default("free") // "free" | "pro"
+  role                 String     @default("user") // "user" | "admin"
+  stripeCustomerId     String?    @unique
+  stripeSubscriptionId String?
   drafts        Draft[]
   accounts      Account[]
   sessions      Session[]
+  feedback      Feedback[]
 
   @@map("user")
 }
@@ -50,8 +55,20 @@ model Draft {
   deadline  String?
   starred   Boolean   @default(false)
   topic     String?
+  sources   Json?     // citation sources: Source[] (see backend/src/lib/sources.ts)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   versions  Version[]
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String?
+  email     String?
+  message   String
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
 }
 
 model Version {
