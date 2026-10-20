@@ -29,7 +29,7 @@ const groq = new Groq({
 // Middleware
 const corsOptions = process.env.NODE_ENV === 'production'
   ? {
-      origin: process.env.FRONTEND_URL || ['http://localhost:5173', 'http://127.0.0.1:5173'],
+      origin: process.env.FRONTEND_URL || ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://vcfd2-frontend.vercel.app'],
       credentials: true,
     }
   : { origin: true, credentials: true }
