@@ -1,9 +1,9 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
-// import helmet from 'helmet'
+import helmet from 'helmet'
 // import helmet = require('helmet');
-const helmet = require('helmet');
+// const helmet = require('helmet');
 import morgan from 'morgan'
 import { Prisma } from '@prisma/client'
 import { toNodeHandler } from 'better-auth/node'
@@ -33,7 +33,8 @@ const corsOptions = process.env.NODE_ENV === 'production'
       credentials: true,
     }
   : { origin: true, credentials: true }
-app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
+app.use((helmet as any)({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
+// app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
 app.use(cors(corsOptions))
 app.use(morgan('dev'))
 
