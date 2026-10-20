@@ -2,7 +2,8 @@ import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 // import helmet from 'helmet'
-import helmet = require('helmet');
+// import helmet = require('helmet');
+const helmet = require('helmet');
 import morgan from 'morgan'
 import { Prisma } from '@prisma/client'
 import { toNodeHandler } from 'better-auth/node'
