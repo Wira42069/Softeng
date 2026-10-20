@@ -39,9 +39,11 @@ export async function getCurrentUser(req: Request): Promise<CurrentUser | null> 
   })
   if (!user) return null
 
+  const isAdmin = user.role === 'admin' || isAdminEmail(user.email)
+
   return {
     ...user,
-    isPro: isPro(user.plan),
+    isPro: isPro(user.plan) || isAdmin,
     isAdmin: user.role === 'admin' || isAdminEmail(user.email),
   }
 }
