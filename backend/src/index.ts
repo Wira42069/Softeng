@@ -2,8 +2,6 @@ import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
-// import helmet = require('helmet');
-// const helmet = require('helmet');
 import morgan from 'morgan'
 import { Prisma } from '@prisma/client'
 import { toNodeHandler } from 'better-auth/node'
@@ -19,31 +17,59 @@ import { supportRouter } from './routes/support.js'
 import { Groq } from 'groq-sdk'
 
 const app = express()
+
 // Behind Vercel's proxy: needed so rate limiting sees the real client IP.
 app.set('trust proxy', 1)
+
 const PORT = process.env.PORT || 3000
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 })
 
-// Middleware
-const corsOptions = process.env.NODE_ENV === 'production'
-  ? {
-      origin: process.env.FRONTEND_URL || ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://vcfd2-frontend.vercel.app'],
-      credentials: true,
+// Format FRONTEND_URL to guarantee a valid origin with protocol
+const rawFrontendUrl = process.env.FRONTEND_URL || ''
+const formattedFrontendUrl = rawFrontendUrl
+  ? rawFrontendUrl.startsWith('http')
+    ? rawFrontendUrl
+    : `https://${rawFrontendUrl}`
+  : 'https://vcfd2-frontend.vercel.app'
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://vcfd2-frontend.vercel.app',
+  formattedFrontendUrl,
+]
+
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    // Allow server-to-server or non-browser requests
+    if (!origin) return callback(null, true)
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true)
     }
-  : { origin: true, credentials: true }
-app.use((helmet as any)({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
-// app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
+    return callback(new Error(`CORS policy blocked request from ${origin}`))
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With'],
+}
+
+// 1. CORS MUST BE FIRST to answer OPTIONS preflight requests immediately
 app.use(cors(corsOptions))
+
+// 2. Helmet security headers & logging
+app.use((helmet as any)({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
 app.use(morgan('dev'))
 
-// Mount Better-Auth handler
+// 3. Mount Better-Auth handler
 app.use('/api/auth', toNodeHandler(auth))
 
-// Stripe webhook needs the raw request body, so it must come BEFORE express.json().
+// 4. Stripe webhook needs raw body, so place before express.json()
 app.post('/api/billing/webhook', stripeWebhook)
 
+// 5. Body parsers
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
