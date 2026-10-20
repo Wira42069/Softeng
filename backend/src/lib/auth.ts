@@ -15,6 +15,7 @@ const trustedOrigins = [
   'https://flowdraftfrontend.vercel.app',
   'https://flowdraftfrontend-wira-s-projects2.vercel.app',
   'https://vcfd-frontend.vercel.app',
+  'https://vcfd2-frontend.vercel.app',
   process.env.FRONTEND_URL,
 ].filter((origin): origin is string => Boolean(origin))
 
