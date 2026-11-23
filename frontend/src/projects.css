@@ -843,6 +843,35 @@ button.projects-stat-card:disabled {
   color: #0b7a46;
 }
 
+.settings-danger {
+  border-color: #f1c1bd;
+}
+
+.settings-danger h3 {
+  color: #b43b32;
+}
+
+.settings-delete-btn {
+  border: 1px solid #b43b32;
+  border-radius: 10px;
+  background: #fff;
+  color: #b43b32;
+  padding: 11px 18px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.settings-delete-btn:hover:not(:disabled) {
+  background: #b43b32;
+  color: #fff;
+}
+
+.settings-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ───────────────────────────────────────
    Responsive
    ─────────────────────────────────────── */

@@ -13,6 +13,7 @@ import {
   MessageSquare,
 } from 'lucide-react'
 import AdSlot from '../components/AdSlot'
+import DeleteAccountDialog from '../components/DeleteAccountDialog'
 import FeedbackDialog from '../components/FeedbackDialog'
 import UpgradePrompt from '../components/UpgradePrompt'
 import { api } from '../lib/api'
@@ -155,6 +156,7 @@ export default function ProjectsHome() {
   // Plan limits (free plan: 5 drafts). The server enforces this; the UI just explains it.
   const [upgradeReason, setUpgradeReason] = useState<string | null>(null)
   const [showFeedback, setShowFeedback] = useState(false)
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false)
   const [upgradedNote, setUpgradedNote] = useState('')
   const draftLimit = user?.draftLimit ?? null
   const atLimit = draftLimit !== null && drafts.length >= draftLimit
@@ -502,6 +504,7 @@ export default function ProjectsHome() {
                 }
               }}
               onSubmit={handleSaveSettings}
+              onDeleteAccount={() => setShowDeleteAccount(true)}
             />
           ) : (
             <>
@@ -703,6 +706,14 @@ export default function ProjectsHome() {
       )}
 
       {showFeedback && <FeedbackDialog onClose={() => setShowFeedback(false)} />}
+
+      {showDeleteAccount && user && (
+        <DeleteAccountDialog
+          email={user.email}
+          isPro={user.plan === 'pro'}
+          onClose={() => setShowDeleteAccount(false)}
+        />
+      )}
     </div>
   )
 }
@@ -717,6 +728,7 @@ function SettingsPanel({
   onNicknameChange,
   onPrefChange,
   onSubmit,
+  onDeleteAccount,
 }: {
   displayName: string
   settingsStatus: 'idle' | 'saving' | 'saved' | 'error'
@@ -727,6 +739,7 @@ function SettingsPanel({
   onNicknameChange: (value: string) => void
   onPrefChange: (key: 'autosave' | 'starred', value: boolean) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onDeleteAccount: () => void
 }) {
   return (
     <section className="projects-settings-panel">
@@ -805,6 +818,24 @@ function SettingsPanel({
           </span>
         </div>
       </form>
+
+      <section className="settings-section settings-danger" aria-labelledby="settings-danger-title">
+        <h3 id="settings-danger-title">Delete account</h3>
+        <p className="settings-muted">
+          Permanently delete your account and all of your drafts. Any Pro subscription is cancelled.
+          This cannot be undone.
+        </p>
+        <div>
+          <button
+            className="settings-delete-btn"
+            type="button"
+            disabled={!user}
+            onClick={onDeleteAccount}
+          >
+            Delete my account
+          </button>
+        </div>
+      </section>
     </section>
   )
 }

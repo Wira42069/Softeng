@@ -17,3 +17,4 @@ function perUser(windowMs: number, limit: number, error: string) {
 export const aiLimiter = perUser(60_000, 20, 'Too many AI requests. Please wait a minute.')
 export const feedbackLimiter = perUser(10 * 60_000, 5, 'Too much feedback at once. Please try again later.')
 export const lookupLimiter = perUser(60_000, 30, 'Too many lookups. Please wait a minute.')
+export const deleteAccountLimiter = perUser(10 * 60_000, 5, 'Too many attempts. Please try again later.')

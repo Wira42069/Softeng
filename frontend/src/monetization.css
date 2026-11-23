@@ -49,7 +49,23 @@
 
 /* ---- modals ---- */
 .mz-upgrade,
-.mz-feedback { position: relative; max-width: 440px; }
+.mz-feedback,
+.mz-delete-account { position: relative; max-width: 440px; }
+.mz-delete-account h2 { margin-top: 0; }
+.mz-delete-label { display: block; margin: 1rem 0 0.4rem; font-size: 0.875rem; color: var(--mz-ink); overflow-wrap: anywhere; }
+.mz-delete-account input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 42px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--mz-line);
+  border-radius: 8px;
+  font: inherit;
+}
+.mz-delete-account input:focus { outline: none; border-color: var(--mz-danger); box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.15); }
+.modal-actions .mz-danger { background: var(--mz-danger); color: #fff; font-weight: 700; cursor: pointer; }
+.modal-actions .mz-danger:hover:not(:disabled) { background: #8f1d17; }
+.modal-actions .mz-danger:disabled { opacity: 0.45; cursor: not-allowed; }
 .mz-close {
   position: absolute;
   top: 0.75rem;
