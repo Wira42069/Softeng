@@ -8,8 +8,9 @@ import { toNodeHandler } from 'better-auth/node'
 import { auth } from './lib/auth.js'
 import { prisma } from './lib/prisma.js'
 import { getCurrentUser } from './lib/currentUser.js'
-import { requirePro } from './lib/guards.js'
-import { aiLimiter } from './lib/limiters.js'
+import { requirePro, requireUser, userOf } from './lib/guards.js'
+import { aiLimiter, deleteAccountLimiter } from './lib/limiters.js'
+import { getStripe } from './lib/stripe.js'
 import { FREE_DRAFT_LIMIT } from './lib/plans.js'
 import { billingRouter, stripeWebhook } from './routes/billing.js'
 import { citationsRouter } from './routes/citations.js'
@@ -158,6 +159,64 @@ app.patch('/api/me', async (req, res) => {
     })
 
     res.json(profile)
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+// Permanently deletes the signed-in user's account and everything they own.
+// The caller must send their own email as `confirmEmail`, so a stray request cannot wipe an account.
+// Drafts, versions, sessions and login accounts are removed by the database (ON DELETE CASCADE).
+app.delete('/api/me', requireUser, deleteAccountLimiter, async (req, res) => {
+  try {
+    const user = userOf(res)
+
+    const confirmEmail =
+      typeof req.body?.confirmEmail === 'string' ? req.body.confirmEmail.trim().toLowerCase() : ''
+    if (confirmEmail !== user.email.toLowerCase()) {
+      return res.status(400).json({
+        error: 'Type your account email to confirm deletion.',
+        code: 'CONFIRMATION_MISMATCH',
+      })
+    }
+
+    // Stop billing first. If Stripe cannot cancel the subscription, keep the account so the
+    // user is never left paying for something they can no longer reach.
+    const record = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { stripeSubscriptionId: true },
+    })
+    const subscriptionId = record?.stripeSubscriptionId
+    if (subscriptionId) {
+      const stripe = getStripe()
+      if (!stripe) {
+        return res.status(503).json({
+          error: 'Could not cancel your subscription right now. Please try again later.',
+          code: 'BILLING_NOT_CONFIGURED',
+        })
+      }
+      try {
+        await stripe.subscriptions.cancel(subscriptionId)
+      } catch (stripeError) {
+        // A subscription that no longer exists is already cancelled, so carry on.
+        if ((stripeError as { code?: string }).code !== 'resource_missing') {
+          console.error('Cancelling subscription failed', stripeError)
+          return res.status(502).json({
+            error: 'Could not cancel your subscription, so your account was not deleted. Please try again.',
+            code: 'SUBSCRIPTION_CANCEL_FAILED',
+          })
+        }
+      }
+    }
+
+    await prisma.$transaction([
+      // Feedback is kept, but anonymised: ON DELETE SET NULL clears userId, this clears the email.
+      prisma.feedback.updateMany({ where: { userId: user.id }, data: { email: null } }),
+      prisma.verification.deleteMany({ where: { identifier: user.email } }),
+      prisma.user.delete({ where: { id: user.id } }),
+    ])
+
+    res.status(204).send()
   } catch (error) {
     handleError(res, error)
   }
